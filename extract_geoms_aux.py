@@ -65,7 +65,9 @@ class Atom(object):
 class Geometry(object):
     atoms = [] # a list of atom objects
     n_atoms = 0 # number of atoms
-    scfenergy = 0.0 # SCF Energy in a.u.
+    scf_energy = 0.0 # SCF Energy in a.u.
+    oniom_energy = None # ONIOM extrapolated energy in a.u.
+    in_scan = False
     scan_point = None
     in_irc = False
     irc_point_number = None
@@ -82,8 +84,10 @@ class Geometry(object):
         return self.atoms
     def get_n_atoms(self):
         return self.n_atoms
-    def get_scfenergy(self):
-        return self.scfenergy
+    def get_scf_energy(self):
+        return self.scf_energy
+    def get_oniom_energy(self):
+        return self.oniom_energy
     def get_scan_point(self):
         return self.scan_point
     def get_irc_point_number(self):
@@ -99,8 +103,12 @@ class Geometry(object):
         self.atoms = atoms
     def set_n_atoms(self):
         self.n_atoms = len(self.atoms)
-    def set_scfenergy(self,scf):
-        self.scfenergy = scf
+    def set_scf_energy(self,scf):
+        self.scf_energy = scf
+    def set_oniom_energy(self,oniom_e):
+        self.oniom_energy = oniom_e        
+    def set_in_scan(self,in_scan):
+        self.in_scan = in_scan
     def set_scan_point(self,pt):
         self.scan_point = pt
     def set_in_irc(self,in_irc):
@@ -116,11 +124,14 @@ class Geometry(object):
 
     def print_xyz(self):
         print( str(self.n_atoms) )
-        if not self.in_irc:     
-            head_line = ' Scan point ' + str(self.scan_point) + ' ' +\
-                'scf/oniom energy: ' + str(self.scfenergy)
+        if self.oniom_energy:
+            head_line = 'oniom energy: ' + str(self.oniom_energy)
         else:
-            pass
+            head_line = 'scf energy: ' + str(self.scf_energy)
+        if self.in_scan:     
+            head_line = ' Scan point ' + str(self.scan_point) + ' ' + head_line
+        elif self.in_irc:
+            head_line = ' IRC net coordinate: ' + str(self.irc_net_reaction_coordinate) + ' ' + head_line            
         print(head_line)
         for atom in self.atoms:
             ele = atom.get_symbol()
@@ -149,7 +160,6 @@ def log_read_geo(file):
         a = file.readline()
         if not a:
             return "EOF"
-            break
         match_flag=re.search(flag_line,a)
         if match_flag:
             for i in range(4):
@@ -200,15 +210,42 @@ def log_read_step_number_line(file):
     return None
 
 
+def irc_point_tuple(x,y,z):
+    irc_tup = namedtuple("irc_tup", "path_nr point_nr net_reaction_coord")
+    return irc_tup(*irc_tup(x,y,z))
+
+
+def log_read_irc_data(file):
+    flag_line = "Point Number:"
+    while True:
+        a = file.readline()
+        if not a:
+            break
+        match_flag=re.search(flag_line,a)
+        if match_flag:
+            a_split = a.split() 
+            point_nr = eval(a_split[2])
+            path_nr = eval(a_split[5])
+            file.readline()
+            a = file.readline()
+            a_split = a.split()
+            net_reaction_coord = eval(a_split[8])
+            irc_tup = irc_point_tuple(path_nr,point_nr,net_reaction_coord)
+            return irc_tup
+    return None
+
+    
+
 def log_irc_or_scan(file):
     """
     In a Gaussian log file find if the calculations are IRC or scan
+    If none of the above, returns "LAST"
     Parameters
     ----------
     file : log file (file object)
     Returns
     -------
-    a string "SCAN" or "IRC"
+    a string "SCAN" or "IRC" or "LAST"
     """        
     file.seek(0)
     flag_irc = "IRC-IRC-IRC-IRC"
@@ -216,7 +253,8 @@ def log_irc_or_scan(file):
     while True:
         a = file.readline()
         if not a:
-            break
+            file.seek(0)
+            return "LAST"
         match_irc = re.search(flag_irc,a)
         match_scan = re.search(flag_scan,a)
         if match_irc:
@@ -263,14 +301,14 @@ def log_read_scf(file):
     file : log file (file object)
     Returns
     -------
-    a float: scf_energy
+    a float: scf_energy or None
     """ 
     flag_no_conv = ">>>>>>>>>> Convergence criterion not met"
     flag_scf = "SCF Done:"
     while True:
         a = file.readline()
         if not a:
-            break
+            return None
         match_no_conv = re.search(flag_no_conv,a)
         match_scf = re.search(flag_scf,a)
         if match_no_conv:
@@ -324,3 +362,27 @@ def is_geom_converged(file):
             return False
         elif match_conv:
             return True
+
+def is_irc_converged(file):
+    """
+    In a Gaussian log file find if IRC point optimization completed or not
+    Parameters
+    ----------
+    file : log file (file object)
+    Returns
+    -------
+    BOOL: True or False
+    """
+    flag_conv = "Delta-x Convergence Met"
+    #flag_end_section = "IRC-IRC-IRC-IRC"
+    flag_end_section = "Calculating another point on the path."
+    while True:
+        a = file.readline()
+        if not a:
+            break
+        match_conv = re.search(flag_conv,a)
+        match_end_section = re.search(flag_end_section,a)
+        if match_end_section:
+            return False
+        elif match_conv:
+            return True    
