@@ -58,9 +58,10 @@ if sys.argv[2]:
 
 # optionally to read TS geometry and energy (IRC point 0)
 irc_ts_file_name = None            
-if sys.argv[3]:
+if len(sys.argv) > 3:
     irc_ts_file_name = sys.argv[3]
 
+#print(sys.argv)
 
 ### ---------------------------------------------------------------------- ###
 ### test cases
@@ -163,7 +164,7 @@ if RUN_TYPE == "IRC" and irc_ts_file_name:
     temp_geo.set_in_irc(True)
     irc_geometries.append(temp_geo)    
 
-irc_ts_f.close()
+    irc_ts_f.close()
 
 ### ---------------------------------------------------------------------- ###
 ### generating the output                                                  ###
