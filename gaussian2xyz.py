@@ -9,13 +9,16 @@ For geometry 1-D scan or IRC calculations optimized (or last) geometries
 for points along the scanned coordinate or IRC are output. A png file with a plot
 of ONIOM or SCF energies along the profile is generated.
 
-The script expects 2 arguments: #1 log-file-name, #2 type of extraction - one
-    from amoung: scan, irc, all, last
+The script expects 2 or 3 arguments: 
+    #1 log-file-name, 
+    #2 type of extraction - one from amoung: scan, irc, all, last, 
+    #3 (for IRC) file name with SP/FREQ calculations for the TS from which IRC calculations started
 
 @author: Tomasz Borowski
 """
 import sys
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 from extract_geoms_aux import log_read_geo, log_read_step_number_line
 from extract_geoms_aux import log_irc_or_scan, log_read_scf, is_geom_converged
 from extract_geoms_aux import log_is_ONIOM, log_read_oniom_e, is_irc_converged
@@ -52,6 +55,11 @@ if sys.argv[2]:
         flag_read = flag_read.upper()
         if flag_read in LEGIT_RUN_TYPE:
             RUN_TYPE = flag_read
+
+# optionally to read TS geometry and energy (IRC point 0)
+irc_ts_file_name = None            
+if sys.argv[3]:
+    irc_ts_file_name = sys.argv[3]
 
 
 ### ---------------------------------------------------------------------- ###
@@ -144,6 +152,20 @@ input_f.close()
 
 
 ### ---------------------------------------------------------------------- ###
+### optionally for IRC read the TS from a separate file                    ###
+
+if RUN_TYPE == "IRC" and irc_ts_file_name:    
+    irc_ts_f = open(irc_ts_file_name, 'r')
+    temp_geo = read_geo_scf_oniom_e(irc_ts_f)
+    temp_geo.set_irc_path_number( 1 )
+    temp_geo.set_irc_point_number( 0 )
+    temp_geo.set_irc_net_reaction_coordinate( 0.0 )
+    temp_geo.set_in_irc(True)
+    irc_geometries.append(temp_geo)    
+
+irc_ts_f.close()
+
+### ---------------------------------------------------------------------- ###
 ### generating the output                                                  ###
 
 if RUN_TYPE == "SCAN":
@@ -163,9 +185,10 @@ if RUN_TYPE == "SCAN":
         
         
     plt.figure(1)
-    plt.plot(seq_nr, energie, 'go--', linewidth=1, markersize=6)
+    ax = plt.figure().gca()
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True)) 
+    plt.plot(seq_nr, energie, 'go--', linewidth=1, markersize=6)   
     plt.grid(b=True, which='major', axis='both')
-#    plt.xticks(ticks=seq_nr, labels=points)
     plt.xlabel('Scan point number')
     if ONIOM:
         plt.ylabel('ONIOM E [a.u.]')
@@ -193,9 +216,8 @@ elif RUN_TYPE == "IRC":
             energie.append( geo.get_scf_energy() )
  
     plt.figure(1)
-    plt.plot(irc_net_coord, energie, 'go--', linewidth=1, markersize=6)
+    plt.plot(irc_net_coord, energie, 'go--', linewidth=1, markersize=6)   
     plt.grid(b=True, which='major', axis='both')
-#    plt.xticks(ticks=seq_nr, labels=points)
     plt.xlabel('IRC net coordinate')
     if ONIOM:
         plt.ylabel('ONIOM E [a.u.]')
@@ -206,9 +228,10 @@ elif RUN_TYPE == "IRC":
 
 elif RUN_TYPE == "ALL":
     plt.figure(1)
+    ax = plt.figure().gca()
+    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
     plt.plot(seq_nr, energie, 'go--', linewidth=1, markersize=6)
     plt.grid(b=True, which='major', axis='both')
-#    plt.xticks(ticks=seq_nr, labels=seq_nr)
     plt.xlabel('Geometry number')
     if ONIOM:
         plt.ylabel('ONIOM E [a.u.]')
