@@ -10,11 +10,14 @@ for points along the scanned coordinate or IRC are output. A png file with a plo
 of ONIOM or SCF energies along the profile is generated.
 
 The script expects 2 or 3 arguments: 
-    #1 log-file-name, 
-    #2 type of extraction - one from amoung: scan, irc, all, last, 
+    #1 log-file-name or, for irc_f, name of a file specifying filenames and directions of irc calc.
+    #2 type of extraction - one from amoung: scan, irc, irc_f, all, last, 
     #3 (for IRC) file name with SP/FREQ calculations for the TS from which IRC calculations started
 
 @author: Tomasz Borowski
+
+branch: irc_multi_file
+last modification: 9.01.2022
 """
 import sys
 import matplotlib.pyplot as plt
@@ -24,7 +27,8 @@ from extract_geoms_aux import log_irc_or_scan, log_read_scf, is_geom_converged
 from extract_geoms_aux import log_is_ONIOM, log_read_oniom_e, is_irc_converged
 from extract_geoms_aux import log_read_irc_data
 
-LEGIT_RUN_TYPE = ["SCAN", "IRC", "ALL", "LAST"]
+LEGIT_RUN_TYPE = ["SCAN", "IRC", "IRC_F", "ALL", "LAST"]
+LEGIT_DIRECTIONS = ["REVERSE", "TS", "FORWARD"]
 
 def read_geo_scf_oniom_e(input_f):
     """ from Gaussian output file read geometry and its SCF and ONIOM energies 
@@ -69,8 +73,14 @@ if len(sys.argv) > 3:
 #inp_file_name = './input_examples/2x_scan.log'
 #inp_file_name = './input_examples/h2o_opt.log'
 #inp_file_name = './input_examples/h2o_sp.log'
-# inp_file_name = './input_examples/oh_h2o.irc.log'
+#inp_file_name = './input_examples/oh_h2o.irc.log'
 
+# irc_ts_file_name = None
+# inp_file_name = './input_examples/oh_h2o.irc.info'
+# RUN_TYPE = "IRC_F"
+
+# irc_ts_file_name = None
+# inp_file_name = './input_examples/oh_h2o.irc_1b.log'
 # RUN_TYPE = "IRC"
 
 
@@ -88,7 +98,6 @@ if RUN_TYPE not in LEGIT_RUN_TYPE:
     RUN_TYPE = log_irc_or_scan(input_f)
     
 ONIOM = log_is_ONIOM(input_f)
-
 
 if RUN_TYPE == "SCAN":
     scan_geometries = []
@@ -149,8 +158,6 @@ if RUN_TYPE =="LAST":
                 prev_temp_geo.print_xyz()
 
 
-input_f.close()
-
 
 ### ---------------------------------------------------------------------- ###
 ### optionally for IRC read the TS from a separate file                    ###
@@ -166,6 +173,77 @@ if RUN_TYPE == "IRC" and irc_ts_file_name:
 
     irc_ts_f.close()
 
+
+### ---------------------------------------------------------------------- ###
+### case IRC_F                                                             ###
+irc_file_names = []
+irc_directions = [] 
+                                                 
+if RUN_TYPE == "IRC_F":   
+    while True:
+        a = input_f.readline()
+        if not a:
+            break
+        a_split = a.split()
+        irc_file_names.append(a_split[0])
+        direction_read = a_split[1].upper()
+        if direction_read in LEGIT_DIRECTIONS:
+            irc_directions.append(direction_read)
+
+input_f.close()
+
+if RUN_TYPE == "IRC_F":
+    nr_irc_files = len(irc_file_names)
+    nr_irc_directions = len(irc_directions)
+    
+    if nr_irc_files != nr_irc_directions:
+        print("\n Huston, we've got a problem with a file specifying irc files\n")
+        sys.exit("I am exiting")
+    else:
+        irc_geometries = [] 
+        react_coord_offset = 0.0
+        last_reaction_coord = 0.0
+        point_offset = 0
+        last_point_nr = 0
+        prev_path = None
+        for f_name, irc_dir in zip(irc_file_names, irc_directions):
+            temp_geo = None
+            if irc_dir == 'REVERSE':
+                path_nr = 2
+            elif irc_dir == 'FORWARD':
+                path_nr = 1
+            if path_nr != prev_path:
+                prev_path = path_nr
+                react_coord_offset = 0.0
+                point_offset = 0
+            else:
+                react_coord_offset = last_reaction_coord
+                point_offset = last_point_nr
+            input_f = open(f_name, 'r')
+            if irc_dir == 'TS':
+                temp_geo = read_geo_scf_oniom_e(input_f)
+                temp_geo.set_irc_path_number( 1 )
+                temp_geo.set_irc_point_number( 0 )
+                temp_geo.set_irc_net_reaction_coordinate( 0.0 )
+                temp_geo.set_in_irc(True)
+                irc_geometries.append(temp_geo)
+            else:    
+                while temp_geo != "EOF":
+                    temp_geo = read_geo_scf_oniom_e(input_f)
+                    irc_conv = is_irc_converged(input_f)
+                    if irc_conv:
+                        irc_pt = log_read_irc_data(input_f)
+                        if irc_pt:
+                            temp_geo.set_irc_path_number( path_nr )                       
+                            temp_geo.set_irc_point_number( irc_pt.point_nr + point_offset )
+                            temp_geo.set_irc_net_reaction_coordinate( irc_pt.net_reaction_coord  + react_coord_offset)
+                            temp_geo.set_in_irc(True)
+                            irc_geometries.append(temp_geo)
+                            last_reaction_coord = irc_pt.net_reaction_coord + react_coord_offset
+                            last_point_nr = irc_pt.point_nr + point_offset
+            input_f.close()
+        
+        
 ### ---------------------------------------------------------------------- ###
 ### generating the output                                                  ###
 
@@ -198,7 +276,7 @@ if RUN_TYPE == "SCAN":
     plt.savefig(fig_file_name, dpi=300)
     
 
-elif RUN_TYPE == "IRC":
+elif RUN_TYPE == "IRC" or RUN_TYPE == "IRC_F":
     irc_net_coord = []
     energie = []
     for geo in irc_geometries:
