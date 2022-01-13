@@ -156,12 +156,15 @@ def log_read_geo(file):
     # w pliku file wyszukaj odp linii
     flag_line = "Input orientation:"
     atoms = []
+    j=0
     while True:
         a = file.readline()
         if not a:
             return "EOF"
+            print(j)
         match_flag=re.search(flag_line,a)
         if match_flag:
+            j=j+1
             for i in range(4):
                 file.readline()
             while True:
@@ -215,7 +218,7 @@ def irc_point_tuple(x,y,z):
     return irc_tup(*irc_tup(x,y,z))
 
 
-def log_read_irc_data(file):
+def log_read_irc_data(file, last):
     flag_line = "Point Number:"
     while True:
         a = file.readline()
@@ -231,7 +234,12 @@ def log_read_irc_data(file):
             a_split = a.split()
             net_reaction_coord = eval(a_split[8])
             irc_tup = irc_point_tuple(path_nr,point_nr,net_reaction_coord)
-            return irc_tup
+            if last == None:
+                return irc_tup
+            if last != None and point_nr <= int(last):
+                return irc_tup
+            else:
+                break
     return None
 
     

@@ -52,6 +52,7 @@ RUN_TYPE = None
 ### Seting the file names                                                  ###
 inp_file_name = sys.argv[1]
 fig_file_name = inp_file_name + ".png"
+energy_file_name = inp_file_name + ".dat"
 
 if sys.argv[2]:
     flag_read = sys.argv[2]
@@ -178,6 +179,7 @@ if RUN_TYPE == "IRC" and irc_ts_file_name:
 ### case IRC_F                                                             ###
 irc_file_names = []
 irc_directions = [] 
+irc_last = [] 
                                                  
 if RUN_TYPE == "IRC_F":   
     while True:
@@ -187,9 +189,12 @@ if RUN_TYPE == "IRC_F":
         a_split = a.split()
         irc_file_names.append(a_split[0])
         direction_read = a_split[1].upper()
+        if len(a.split())==3:
+            irc_last.append(a_split[2])
+        else:
+            irc_last.append(None)
         if direction_read in LEGIT_DIRECTIONS:
             irc_directions.append(direction_read)
-
 input_f.close()
 
 if RUN_TYPE == "IRC_F":
@@ -206,7 +211,7 @@ if RUN_TYPE == "IRC_F":
         point_offset = 0
         last_point_nr = 0
         prev_path = None
-        for f_name, irc_dir in zip(irc_file_names, irc_directions):
+        for f_name, irc_dir, irc_last_point in zip(irc_file_names, irc_directions, irc_last):
             temp_geo = None
             if irc_dir == 'REVERSE':
                 path_nr = 2
@@ -232,7 +237,7 @@ if RUN_TYPE == "IRC_F":
                     temp_geo = read_geo_scf_oniom_e(input_f)
                     irc_conv = is_irc_converged(input_f)
                     if irc_conv:
-                        irc_pt = log_read_irc_data(input_f)
+                        irc_pt = log_read_irc_data(input_f,irc_last_point)
                         if irc_pt:
                             temp_geo.set_irc_path_number( path_nr )                       
                             temp_geo.set_irc_point_number( irc_pt.point_nr + point_offset )
@@ -293,8 +298,14 @@ elif RUN_TYPE == "IRC" or RUN_TYPE == "IRC_F":
             energie.append( geo.get_oniom_energy() )
         else:
             energie.append( geo.get_scf_energy() )
- 
+    #normalise irc coord
+    min_val=min(irc_net_coord)
+    max_val=max(irc_net_coord)
+    irc_normalised_coord = [(x-min_val)/(max_val-min_val) for x in irc_net_coord]
+
     plt.figure(1)
+    ###plot for normalised IRC coord or one in amu**0.5 Bohr (?) ###
+    #plt.plot(irc_normalised_coord, energie, 'go--', linewidth=1, markersize=6)   
     plt.plot(irc_net_coord, energie, 'go--', linewidth=1, markersize=6)   
     plt.grid(b=True, which='major', axis='both')
     plt.xlabel('IRC net coordinate')
@@ -304,6 +315,12 @@ elif RUN_TYPE == "IRC" or RUN_TYPE == "IRC_F":
         plt.ylabel('SCF E [a.u.]')
     plt.savefig(fig_file_name, dpi=300)
        
+    ### write energy and coords to file ###
+    energy_file=open(energy_file_name, 'w')
+    for i in range(len(irc_net_coord)):
+        line=str("{:.6f}".format(irc_net_coord[i]))+"\t"+str("{:.6f}".format(irc_normalised_coord[i]))+"\t"+str(energie[i])+"\n"
+        energy_file.write(line)
+    energy_file.close()
 
 elif RUN_TYPE == "ALL":
     plt.figure(1)
