@@ -14,10 +14,10 @@ The script expects 2 or 3 arguments:
     #2 type of extraction - one from amoung: scan, irc, irc_f, all, last, 
     #3 (for IRC) file name with SP/FREQ calculations for the TS from which IRC calculations started
 
-@author: Tomasz Borowski
+@author: Tomasz Borowski, Zuzanna Wojdyła
 
-branch: irc_multi_file
-last modification: 9.01.2022
+branch: zuza
+last modification: 13.01.2022
 """
 import sys
 import matplotlib.pyplot as plt
@@ -118,12 +118,13 @@ if RUN_TYPE == "SCAN":
     
 elif RUN_TYPE == "IRC":
     irc_geometries = [] 
+    irc_last_point = None
     temp_geo = None
     while temp_geo != "EOF":
         temp_geo = read_geo_scf_oniom_e(input_f)
         irc_conv = is_irc_converged(input_f)
         if irc_conv:
-            irc_pt = log_read_irc_data(input_f)
+            irc_pt = log_read_irc_data(input_f, irc_last_point)
             if irc_pt:
                 temp_geo.set_irc_path_number( irc_pt.path_nr )
                 temp_geo.set_irc_point_number( irc_pt.point_nr )
@@ -272,7 +273,8 @@ if RUN_TYPE == "SCAN":
     ax = plt.figure().gca()
     ax.xaxis.set_major_locator(MaxNLocator(integer=True)) 
     plt.plot(seq_nr, energie, 'go--', linewidth=1, markersize=6)   
-    plt.grid(b=True, which='major', axis='both')
+#    plt.grid(b=True, which='major', axis='both')
+    plt.grid(visible=True, which='major', axis='both')
     plt.xlabel('Scan point number')
     if ONIOM:
         plt.ylabel('ONIOM E [a.u.]')
@@ -307,7 +309,8 @@ elif RUN_TYPE == "IRC" or RUN_TYPE == "IRC_F":
     ###plot for normalised IRC coord or one in amu**0.5 Bohr (?) ###
     #plt.plot(irc_normalised_coord, energie, 'go--', linewidth=1, markersize=6)   
     plt.plot(irc_net_coord, energie, 'go--', linewidth=1, markersize=6)   
-    plt.grid(b=True, which='major', axis='both')
+#    plt.grid(b=True, which='major', axis='both')
+    plt.grid(visible=True, which='major', axis='both')
     plt.xlabel('IRC net coordinate')
     if ONIOM:
         plt.ylabel('ONIOM E [a.u.]')
@@ -327,7 +330,8 @@ elif RUN_TYPE == "ALL":
     ax = plt.figure().gca()
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
     plt.plot(seq_nr, energie, 'go--', linewidth=1, markersize=6)
-    plt.grid(b=True, which='major', axis='both')
+#    plt.grid(b=True, which='major', axis='both')
+    plt.grid(visible=True, which='major', axis='both')
     plt.xlabel('Geometry number')
     if ONIOM:
         plt.ylabel('ONIOM E [a.u.]')
