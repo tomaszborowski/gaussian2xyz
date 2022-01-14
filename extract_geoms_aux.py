@@ -3,7 +3,7 @@
 """
 a collection of classes and functions for gaussian2xyz
 
-Authors: Tomasz Borowski
+Authors: Tomasz Borowski, Zuzanna Wojdyla
 """
 
 import numpy as np
@@ -207,7 +207,6 @@ def log_read_step_number_line(file):
             step_max = eval(a_split[8])
             scan_point = eval(a_split[12])
             scan_max = eval(a_split[15])
-#            return (step_nr, step_max, scan_point, scan_max)
             slt = step_line_tuple(step_nr,step_max,scan_point,scan_max)
             return slt
     return None
@@ -382,7 +381,6 @@ def is_irc_converged(file):
     BOOL: True or False
     """
     flag_conv = "Delta-x Convergence Met"
-    #flag_end_section = "IRC-IRC-IRC-IRC"
     flag_end_section = "Calculating another point on the path."
     while True:
         a = file.readline()

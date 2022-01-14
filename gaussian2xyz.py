@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Wed Aug 11 16:09:10 2021
-
 This script reads Gaussian log file and outputs xyz with optimized geometry/ies.
 
 For geometry 1-D scan or IRC calculations optimized (or last) geometries 
@@ -14,11 +12,10 @@ The script expects 2 or 3 arguments:
     #2 type of extraction - one from amoung: scan, irc, irc_f, all, last, 
     #3 (for IRC) file name with SP/FREQ calculations for the TS from which IRC calculations started
 
-@author: Tomasz Borowski, Zuzanna Wojdyła
-
-branch: zuza
-last modification: 13.01.2022
+@authors: Tomasz Borowski, Zuzanna Wojdyła
+last modification: 14.01.2022
 """
+
 import sys
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
@@ -66,29 +63,10 @@ irc_ts_file_name = None
 if len(sys.argv) > 3:
     irc_ts_file_name = sys.argv[3]
 
-#print(sys.argv)
-
-### ---------------------------------------------------------------------- ###
-### test cases
-#inp_file_name = './input_examples/oh_h2o.scan.log'
-#inp_file_name = './input_examples/2x_scan.log'
-#inp_file_name = './input_examples/h2o_opt.log'
-#inp_file_name = './input_examples/h2o_sp.log'
-#inp_file_name = './input_examples/oh_h2o.irc.log'
-
-# irc_ts_file_name = None
-# inp_file_name = './input_examples/oh_h2o.irc.info'
-# RUN_TYPE = "IRC_F"
-
-# irc_ts_file_name = None
-# inp_file_name = './input_examples/oh_h2o.irc_1b.log'
-# RUN_TYPE = "IRC"
-
 
 ### ---------------------------------------------------------------------- ###
 ### Fig file names                                                         ###
 fig_file_name = inp_file_name + ".png"
-
 
 
 ### ---------------------------------------------------------------------- ###
@@ -273,7 +251,6 @@ if RUN_TYPE == "SCAN":
     ax = plt.figure().gca()
     ax.xaxis.set_major_locator(MaxNLocator(integer=True)) 
     plt.plot(seq_nr, energie, 'go--', linewidth=1, markersize=6)   
-#    plt.grid(b=True, which='major', axis='both')
     plt.grid(visible=True, which='major', axis='both')
     plt.xlabel('Scan point number')
     if ONIOM:
@@ -306,10 +283,9 @@ elif RUN_TYPE == "IRC" or RUN_TYPE == "IRC_F":
     irc_normalised_coord = [(x-min_val)/(max_val-min_val) for x in irc_net_coord]
 
     plt.figure(1)
-    ###plot for normalised IRC coord or one in amu**0.5 Bohr (?) ###
+    ###plot for normalised IRC coord or one in units used by Gaussian ###
     #plt.plot(irc_normalised_coord, energie, 'go--', linewidth=1, markersize=6)   
     plt.plot(irc_net_coord, energie, 'go--', linewidth=1, markersize=6)   
-#    plt.grid(b=True, which='major', axis='both')
     plt.grid(visible=True, which='major', axis='both')
     plt.xlabel('IRC net coordinate')
     if ONIOM:
@@ -318,7 +294,7 @@ elif RUN_TYPE == "IRC" or RUN_TYPE == "IRC_F":
         plt.ylabel('SCF E [a.u.]')
     plt.savefig(fig_file_name, dpi=300)
        
-    ### write energy and coords to file ###
+    ### write energy and coords to a file ###
     energy_file=open(energy_file_name, 'w')
     for i in range(len(irc_net_coord)):
         line=str("{:.6f}".format(irc_net_coord[i]))+"\t"+str("{:.6f}".format(irc_normalised_coord[i]))+"\t"+str(energie[i])+"\n"
@@ -330,7 +306,6 @@ elif RUN_TYPE == "ALL":
     ax = plt.figure().gca()
     ax.xaxis.set_major_locator(MaxNLocator(integer=True))
     plt.plot(seq_nr, energie, 'go--', linewidth=1, markersize=6)
-#    plt.grid(b=True, which='major', axis='both')
     plt.grid(visible=True, which='major', axis='both')
     plt.xlabel('Geometry number')
     if ONIOM:
