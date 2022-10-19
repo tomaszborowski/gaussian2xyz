@@ -3,9 +3,9 @@ Python3 script extracting geometry from Gaussian output file
 
 The script expects 2 or 3 arguments: 
     #1 log-file-name or, for irc_f, name of a file specifying filenames and directions of irc calc.
-    #2 type of extraction - one from amoung: scan, irc, irc_f, all, last, 
+    #2 type of extraction - one from amoung: scan, irc, irc_f, all, last, nr
     #3 (for IRC) file name with SP/FREQ calculations for the TS from which IRC calculations started
-    
+        or for NR 1-based number of the structure to be extracted
 Example usage:
 gaussian2xyz.py oh_h2o.scan.log scan > oh_h2o.scan.xyz
 

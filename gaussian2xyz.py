@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-This script reads Gaussian log file and outputs xyz with optimized geometry/ies.
+This script reads Gaussian log file and outputs xyz geometry/ies.
 
 For geometry 1-D scan or IRC calculations optimized (or last) geometries 
 for points along the scanned coordinate or IRC are output. A png file with a plot
@@ -9,11 +9,12 @@ of ONIOM or SCF energies along the profile is generated.
 
 The script expects 2 or 3 arguments: 
     #1 log-file-name or, for irc_f, name of a file specifying filenames and directions of irc calc.
-    #2 type of extraction - one from amoung: scan, irc, irc_f, all, last, 
+    #2 type of extraction - one from amoung: scan, irc, irc_f, all, last, nr
     #3 (for IRC) file name with SP/FREQ calculations for the TS from which IRC calculations started
+       or for NR 1-based number of the structure to be extracted
 
 @authors: Tomasz Borowski, Zuzanna Wojdyła
-last modification: 14.01.2022
+last modification: 17.10.2022
 """
 
 import sys
@@ -22,9 +23,9 @@ from matplotlib.ticker import MaxNLocator
 from extract_geoms_aux import log_read_geo, log_read_step_number_line
 from extract_geoms_aux import log_irc_or_scan, log_read_scf, is_geom_converged
 from extract_geoms_aux import log_is_ONIOM, log_read_oniom_e, is_irc_converged
-from extract_geoms_aux import log_read_irc_data
+from extract_geoms_aux import log_read_irc_data, log_is_MM, log_read_mm_e
 
-LEGIT_RUN_TYPE = ["SCAN", "IRC", "IRC_F", "ALL", "LAST"]
+LEGIT_RUN_TYPE = ["SCAN", "IRC", "IRC_F", "ALL", "LAST", "NR"]
 LEGIT_DIRECTIONS = ["REVERSE", "TS", "FORWARD"]
 
 def read_geo_scf_oniom_e(input_f):
@@ -43,6 +44,19 @@ def read_geo_scf_oniom_e(input_f):
     return temp_geo
 
 
+def read_geo_mm_e(input_f):
+    """ from Gaussian output file read MM optimized geometry and its MM energy 
+    INPUT: input_f - file object (Gaussian output file)
+    OUTPUT: temp_geo - Geometry object or "EOF" string  """
+    mm_e = log_read_mm_e(input_f)
+    temp_geo = log_read_geo(input_f)
+    if temp_geo != "EOF":        
+        temp_geo.set_scf_energy(mm_e)
+        return temp_geo
+    else:
+        return "EOF"           
+
+
 RUN_TYPE = None
 
 ### ---------------------------------------------------------------------- ###
@@ -59,10 +73,20 @@ if sys.argv[2]:
             RUN_TYPE = flag_read
 
 # optionally to read TS geometry and energy (IRC point 0)
-irc_ts_file_name = None            
+# or number of structure ("NR")
+irc_ts_file_name = None    
+str_number = None        
 if len(sys.argv) > 3:
-    irc_ts_file_name = sys.argv[3]
+    if RUN_TYPE == "IRC_F":
+        irc_ts_file_name = sys.argv[3]
+    elif RUN_TYPE == "NR":
+        str_number = eval( sys.argv[3] )
 
+
+# inp_file_name = "./input_examples/oh_h2o.scan.log"
+# energy_file_name = "./input_examples/oh_h2o.scan.log.dat"
+# RUN_TYPE = "NR"
+# str_number = 133
 
 ### ---------------------------------------------------------------------- ###
 ### Fig file names                                                         ###
@@ -77,6 +101,7 @@ if RUN_TYPE not in LEGIT_RUN_TYPE:
     RUN_TYPE = log_irc_or_scan(input_f)
     
 ONIOM = log_is_ONIOM(input_f)
+MM = log_is_MM(input_f)
 
 if RUN_TYPE == "SCAN":
     scan_geometries = []
@@ -117,7 +142,10 @@ if RUN_TYPE == "ALL":
     i = 1
     temp_geo = None
     while temp_geo != "EOF":
-        temp_geo = read_geo_scf_oniom_e(input_f)
+        if MM:
+            temp_geo = read_geo_mm_e(input_f)
+        else:
+            temp_geo = read_geo_scf_oniom_e(input_f)
         if temp_geo != "EOF" and temp_geo.get_scf_energy():                
             temp_geo.print_xyz()
             seq_nr.append( i )
@@ -132,12 +160,27 @@ if RUN_TYPE =="LAST":
             prev_temp_geo = None
         elif temp_geo.get_scf_energy():
             prev_temp_geo = temp_geo
-        temp_geo = read_geo_scf_oniom_e(input_f)
+        if MM:
+            temp_geo = read_geo_mm_e(input_f)
+        else:
+            temp_geo = read_geo_scf_oniom_e(input_f)
         if temp_geo == "EOF":
             if prev_temp_geo != "EOF" and prev_temp_geo != None:
                 prev_temp_geo.print_xyz()
 
 
+if RUN_TYPE == "NR":
+    i = 0
+    temp_geo = None
+    while temp_geo != "EOF":
+        if MM:
+            temp_geo = read_geo_mm_e(input_f)
+        else:
+            temp_geo = read_geo_scf_oniom_e(input_f)
+        i += 1
+        if temp_geo != "EOF" and temp_geo.get_scf_energy() and i == str_number:                
+            temp_geo.print_xyz()
+    
 
 ### ---------------------------------------------------------------------- ###
 ### optionally for IRC read the TS from a separate file                    ###
@@ -310,6 +353,8 @@ elif RUN_TYPE == "ALL":
     plt.xlabel('Geometry number')
     if ONIOM:
         plt.ylabel('ONIOM E [a.u.]')
+    elif MM:
+        plt.ylabel('MM Energy [a.u.]')
     else:
         plt.ylabel('SCF E [a.u.]')
     plt.savefig(fig_file_name, dpi=300)   

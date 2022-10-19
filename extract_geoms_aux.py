@@ -4,6 +4,7 @@
 a collection of classes and functions for gaussian2xyz
 
 Authors: Tomasz Borowski, Zuzanna Wojdyla
+last modification: 17.10.2022
 """
 
 import numpy as np
@@ -154,14 +155,15 @@ def log_read_geo(file):
     geometry (Geometry object) or string "EOF"
     """
     # w pliku file wyszukaj odp linii
-    flag_line = "Input orientation:"
+#    flag_line = "Input orientation:"
+    flag_line = " orientation:"
     atoms = []
     j=0
     while True:
         a = file.readline()
         if not a:
             return "EOF"
-            print(j)
+#            print(j)
         match_flag=re.search(flag_line,a)
         if match_flag:
             j=j+1
@@ -299,6 +301,35 @@ def log_is_ONIOM(file):
             file.seek(0)
             return False
 
+
+def log_is_MM(file):
+    """
+    In a Gaussian log file find if the calculations are of MM type
+    Parameters
+    ----------
+    file : log file (file object)
+    Returns
+    -------
+    BOOL: True or False
+    """        
+    file.seek(0)
+    flag_amber = " AMBER calculation of energy"
+    flag_oniom = "ONIOM: generating point"
+    while True:
+        a = file.readline()
+        if not a:
+            file.seek(0)
+            return False
+        match_amber = re.search(flag_amber,a)
+        match_oniom = re.search(flag_oniom,a)
+        if match_amber:
+            file.seek(0)
+            return True
+        elif match_oniom:
+            file.seek(0)
+            return False
+            
+        
       
 def log_read_scf(file):
     """
@@ -346,6 +377,36 @@ def log_read_oniom_e(file):
             a_split = a.split()
             oniom_energy = eval( a_split[4] )
             return oniom_energy
+
+
+def log_read_mm_e(file):
+    """
+    In a Gaussian log file find MM energy
+    Parameters
+    ----------
+    file : log file (file object)
+    Returns
+    -------
+    a float: mm_energy or None
+    """ 
+    flag_e_f_class = "Energy per function class:"
+    flag_e = "Energy="
+    while True:
+        a = file.readline()
+        if not a:
+            return None
+        match_class = re.search(flag_e_f_class,a)
+        if match_class:
+            while True:
+                a = file.readline()
+                if not a:
+                    return None
+                match_e = re.search(flag_e,a)
+                if match_e:
+                    a_split = a.split()
+                    mm_energy = eval( a_split[1] )
+                    return mm_energy                    
+                                        
         
 def is_geom_converged(file):
     """
