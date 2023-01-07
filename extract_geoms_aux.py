@@ -4,12 +4,13 @@
 a collection of classes and functions for gaussian2xyz
 
 Authors: Tomasz Borowski, Zuzanna Wojdyla
-last modification: 17.10.2022
+last modification: 7.01.2023
 """
 
 import numpy as np
 import re
 from collections import namedtuple
+import fortranformat as ff
 
 Bohr_to_A = 0.52917721
 Hartree_to_kcal = 627.509608
@@ -143,6 +144,45 @@ class Geometry(object):
                 '{:06.6f}'.format(at_coord[2])
             print(line)
        
+# def log_read_geo(file):
+#     """
+#     Reads atomic coordinates [A] from the Gaussian output
+#     section marked with "Input orientation:" 
+#     Parameters
+#     ----------
+#     file : log file (file object)
+#     Returns
+#     -------
+#     geometry (Geometry object) or string "EOF"
+#     """
+#     # w pliku file wyszukaj odp linii
+# #    flag_line = "Input orientation:"
+#     flag_line = " orientation:"
+#     atoms = []
+#     j=0
+#     while True:
+#         a = file.readline()
+#         if not a:
+#             return "EOF"
+# #            print(j)
+#         match_flag=re.search(flag_line,a)
+#         if match_flag:
+#             j=j+1
+#             for i in range(4):
+#                 file.readline()
+#             while True:
+#                 a = file.readline()
+#                 if a[1] == "-":
+#                     break    
+#                 else:
+#                     a_split = a.split()
+#                     at_number = eval( a_split[1] )
+#                     at_coords = [eval(a_split[3]), eval(a_split[4]), eval(a_split[5])]
+#                     atom = Atom(at_number, at_coords)
+#                     atoms.append(atom)
+#             geometry = Geometry(atoms)
+#             return geometry
+
 def log_read_geo(file):
     """
     Reads atomic coordinates [A] from the Gaussian output
@@ -155,7 +195,6 @@ def log_read_geo(file):
     geometry (Geometry object) or string "EOF"
     """
     # w pliku file wyszukaj odp linii
-#    flag_line = "Input orientation:"
     flag_line = " orientation:"
     atoms = []
     j=0
@@ -163,7 +202,6 @@ def log_read_geo(file):
         a = file.readline()
         if not a:
             return "EOF"
-#            print(j)
         match_flag=re.search(flag_line,a)
         if match_flag:
             j=j+1
@@ -174,9 +212,10 @@ def log_read_geo(file):
                 if a[1] == "-":
                     break    
                 else:
-                    a_split = a.split()
-                    at_number = eval( a_split[1] )
-                    at_coords = [eval(a_split[3]), eval(a_split[4]), eval(a_split[5])]
+                    fortran_line = ff.FortranRecordReader('(I7, I11, I16, 3F12.6)')
+                    line = fortran_line.read(a)
+                    at_number = line[1] 
+                    at_coords = [line[3], line[4], line[5]]
                     atom = Atom(at_number, at_coords)
                     atoms.append(atom)
             geometry = Geometry(atoms)
