@@ -149,7 +149,7 @@ class Geometry(object):
 def log_read_geo(file):
     """
     Reads atomic coordinates [A] from the Gaussian output
-    section marked with "Input orientation:" 
+    section marked with " orientation:" 
     Parameters
     ----------
     file : log file (file object)
@@ -456,6 +456,19 @@ def is_irc_converged(file):
         elif match_conv:
             return True    
 
+
+def scan_file(file, text_flag):
+    file.seek(0)
+    positions = []
+    while True:
+        a = file.readline()
+        if not a:
+            break
+        match = re.search(text_flag,a)
+        if match:
+            positions.append(file.tell())
+    return positions
+        
 
 def print_help():  
     help_text = """

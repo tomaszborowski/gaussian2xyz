@@ -22,7 +22,7 @@ import sys
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 from extract_geoms_aux import log_read_geo, log_read_step_number_line
-from extract_geoms_aux import log_read_scf, is_geom_converged
+from extract_geoms_aux import log_read_scf, is_geom_converged, scan_file
 from extract_geoms_aux import log_is_ONIOM, log_read_oniom_e, is_irc_converged
 from extract_geoms_aux import log_read_irc_data, log_is_MM, log_read_mm_e, print_help
 
@@ -85,8 +85,9 @@ if sys.argv[2]:
         if flag_read in LEGIT_RUN_TYPE:
             RUN_TYPE = flag_read
         else:
-            print("Flag for extraction type that was provided: " + flag_read + " has not been recognized\n")
+            print("Flag for extraction type that was provided: " + flag_read + " has not been recognized \n")
             sys.exit(1)
+
 
 # optionally to read TS geometry and energy (IRC point 0)
 # or number of structure ("NR")
@@ -157,35 +158,29 @@ if RUN_TYPE == "ALL":
             energie.append( temp_geo.get_scf_energy() )
 
 
-if RUN_TYPE =="LAST":
-    temp_geo = None
-    while temp_geo != "EOF":
-        if temp_geo == None:
-            prev_temp_geo = None
-        elif temp_geo.get_scf_energy():
-            prev_temp_geo = temp_geo
-        if MM:
-            temp_geo = read_geo_mm_e(input_f)
-        else:
-            temp_geo = read_geo_scf_oniom_e(input_f)
-        if temp_geo == "EOF":
-            if prev_temp_geo != "EOF" and prev_temp_geo != None:
-                prev_temp_geo.print_xyz()
-
-
-if RUN_TYPE == "NR":
-    i = 0
-    temp_geo = None
-    while temp_geo != "EOF":
-        if MM:
-            temp_geo = read_geo_mm_e(input_f)
-        else:
-            temp_geo = read_geo_scf_oniom_e(input_f)
-        i += 1
-        if temp_geo != "EOF" and temp_geo.get_scf_energy() and i == str_number:                
-            temp_geo.print_xyz()
+if RUN_TYPE =="LAST" or RUN_TYPE == "NR":
+    geometry_positions = scan_file(input_f, " orientation:")
+    if ONIOM:
+        energy_positions = scan_file(input_f, "ONIOM: extrapolated energy =")
+    else:
+        energy_positions = scan_file(input_f, "SCF Done:")
     
+    if RUN_TYPE =="LAST":
+        wanted_e_pos = energy_positions[-1]
+    elif RUN_TYPE == "NR":
+        wanted_e_pos = energy_positions[str_number-1]
+        
+    geometry_positions.reverse()
+    for g_pos in geometry_positions:
+        if g_pos < wanted_e_pos:
+            jump_g_pos = g_pos-200
+            break
+    
+    input_f.seek(jump_g_pos)
+    temp_geo = read_geo_scf_oniom_e(input_f)
+    temp_geo.print_xyz()
 
+    
 ### ---------------------------------------------------------------------- ###
 ### optionally for IRC read the TS from a separate file                    ###
 
