@@ -15,15 +15,16 @@ The script expects 2 or 3 arguments:
 
 @authors: Tomasz Borowski, Zuzanna Wojdyła
 last modification: 17.10.2022
+last modification: 18.05.2023
 """
 
 import sys
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 from extract_geoms_aux import log_read_geo, log_read_step_number_line
-from extract_geoms_aux import log_irc_or_scan, log_read_scf, is_geom_converged
+from extract_geoms_aux import log_read_scf, is_geom_converged
 from extract_geoms_aux import log_is_ONIOM, log_read_oniom_e, is_irc_converged
-from extract_geoms_aux import log_read_irc_data, log_is_MM, log_read_mm_e
+from extract_geoms_aux import log_read_irc_data, log_is_MM, log_read_mm_e, print_help
 
 LEGIT_RUN_TYPE = ["SCAN", "IRC", "IRC_F", "ALL", "LAST", "NR"]
 LEGIT_DIRECTIONS = ["REVERSE", "TS", "FORWARD"]
@@ -60,10 +61,22 @@ def read_geo_mm_e(input_f):
 RUN_TYPE = None
 
 ### ---------------------------------------------------------------------- ###
-### Seting the file names                                                  ###
-inp_file_name = sys.argv[1]
-fig_file_name = inp_file_name + ".png"
-energy_file_name = inp_file_name + ".dat"
+### Seting the file names                                                  ###    
+sys_argv_len = len(sys.argv)
+if sys_argv_len > 1:
+    inp_file_name = sys.argv[1]
+    fig_file_name = inp_file_name + ".png"
+    energy_file_name = inp_file_name + ".dat"
+else:
+    inp_file_name = None
+
+if inp_file_name == "-h":
+    print_help()
+    sys.exit(1)
+
+if inp_file_name == None:
+    print("log-file-name or, for irc_f, name of a file specifying filenames and directions of irc calc not found \n")
+    sys.exit(1)
 
 if sys.argv[2]:
     flag_read = sys.argv[2]
@@ -71,6 +84,9 @@ if sys.argv[2]:
         flag_read = flag_read.upper()
         if flag_read in LEGIT_RUN_TYPE:
             RUN_TYPE = flag_read
+        else:
+            print("Flag for extraction type that was provided: " + flag_read + " has not been recognized\n")
+            sys.exit(1)
 
 # optionally to read TS geometry and energy (IRC point 0)
 # or number of structure ("NR")
@@ -83,22 +99,10 @@ if len(sys.argv) > 3:
         str_number = eval( sys.argv[3] )
 
 
-# inp_file_name = "./input_examples/oh_h2o.scan.log"
-# energy_file_name = "./input_examples/oh_h2o.scan.log.dat"
-# RUN_TYPE = "NR"
-# str_number = 133
-
-### ---------------------------------------------------------------------- ###
-### Fig file names                                                         ###
-fig_file_name = inp_file_name + ".png"
-
-
 ### ---------------------------------------------------------------------- ###
 ### parsing the log/out file                                               ###
 input_f = open(inp_file_name, 'r')
 
-if RUN_TYPE not in LEGIT_RUN_TYPE:
-    RUN_TYPE = log_irc_or_scan(input_f)
     
 ONIOM = log_is_ONIOM(input_f)
 MM = log_is_MM(input_f)

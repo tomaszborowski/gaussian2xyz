@@ -5,6 +5,7 @@ a collection of classes and functions for gaussian2xyz
 
 Authors: Tomasz Borowski, Zuzanna Wojdyla
 last modification: 7.01.2023
+last modification: 18.05.2023
 """
 
 import numpy as np
@@ -142,46 +143,8 @@ class Geometry(object):
                 '{:06.6f}'.format(at_coord[0]) + '     ' +\
                 '{:06.6f}'.format(at_coord[1]) + '     ' +\
                 '{:06.6f}'.format(at_coord[2])
-            print(line)
-       
-# def log_read_geo(file):
-#     """
-#     Reads atomic coordinates [A] from the Gaussian output
-#     section marked with "Input orientation:" 
-#     Parameters
-#     ----------
-#     file : log file (file object)
-#     Returns
-#     -------
-#     geometry (Geometry object) or string "EOF"
-#     """
-#     # w pliku file wyszukaj odp linii
-# #    flag_line = "Input orientation:"
-#     flag_line = " orientation:"
-#     atoms = []
-#     j=0
-#     while True:
-#         a = file.readline()
-#         if not a:
-#             return "EOF"
-# #            print(j)
-#         match_flag=re.search(flag_line,a)
-#         if match_flag:
-#             j=j+1
-#             for i in range(4):
-#                 file.readline()
-#             while True:
-#                 a = file.readline()
-#                 if a[1] == "-":
-#                     break    
-#                 else:
-#                     a_split = a.split()
-#                     at_number = eval( a_split[1] )
-#                     at_coords = [eval(a_split[3]), eval(a_split[4]), eval(a_split[5])]
-#                     atom = Atom(at_number, at_coords)
-#                     atoms.append(atom)
-#             geometry = Geometry(atoms)
-#             return geometry
+            print(line)       
+
 
 def log_read_geo(file):
     """
@@ -221,9 +184,11 @@ def log_read_geo(file):
             geometry = Geometry(atoms)
             return geometry
 
+
 def step_line_tuple(x,y,z,w):
     step_tuple = namedtuple("step_tuple", "step_nr step_max scan_point scan_max")
     return step_tuple(*step_tuple(x,y,z,w))
+
 
 def log_read_step_number_line(file):
     """
@@ -282,7 +247,6 @@ def log_read_irc_data(file, last):
                 break
     return None
 
-    
 
 def log_irc_or_scan(file):
     """
@@ -368,7 +332,6 @@ def log_is_MM(file):
             file.seek(0)
             return False
             
-        
       
 def log_read_scf(file):
     """
@@ -492,3 +455,21 @@ def is_irc_converged(file):
             return False
         elif match_conv:
             return True    
+
+
+def print_help():  
+    help_text = """
+This script reads Gaussian log file and outputs xyz geometry/ies.
+
+For geometry 1-D scan or IRC calculations optimized (or last) geometries 
+for points along the scanned coordinate or IRC are output. A png file with a plot
+of ONIOM or SCF energies along the profile is generated.
+
+The script expects 2 or 3 arguments: 
+    #1 log-file-name or, for irc_f, name of a file specifying filenames and directions of irc calc.
+    #2 type of extraction - one from amoung: scan, irc, irc_f, all, last, nr
+    #3 (for IRC) file name with SP/FREQ calculations for the TS from which IRC calculations started
+       or for NR 1-based number of the structure to be extracted
+    """
+    
+    print(help_text) 
