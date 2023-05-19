@@ -6,6 +6,7 @@ a collection of classes and functions for gaussian2xyz
 Authors: Tomasz Borowski, Zuzanna Wojdyla
 last modification: 7.01.2023
 last modification: 18.05.2023
+last modification: 19.05.2023
 """
 
 import numpy as np
@@ -148,8 +149,8 @@ class Geometry(object):
 
 def log_read_geo(file):
     """
-    Reads atomic coordinates [A] from the Gaussian output
-    section marked with " orientation:" 
+    Reads atomic coordinates [A] in input orientation from the Gaussian output
+    section marked with "Input orientation:" 
     Parameters
     ----------
     file : log file (file object)
@@ -158,7 +159,7 @@ def log_read_geo(file):
     geometry (Geometry object) or string "EOF"
     """
     # w pliku file wyszukaj odp linii
-    flag_line = " orientation:"
+    flag_line = "Input orientation:"
     atoms = []
     j=0
     while True:
@@ -467,6 +468,7 @@ def scan_file(file, text_flag):
         match = re.search(text_flag,a)
         if match:
             positions.append(file.tell())
+    file.seek(0)
     return positions
         
 

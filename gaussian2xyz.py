@@ -16,6 +16,7 @@ The script expects 2 or 3 arguments:
 @authors: Tomasz Borowski, Zuzanna Wojdyła
 last modification: 17.10.2022
 last modification: 18.05.2023
+last modification: 19.05.2023
 """
 
 import sys
@@ -159,8 +160,10 @@ if RUN_TYPE == "ALL":
 
 
 if RUN_TYPE =="LAST" or RUN_TYPE == "NR":
-    geometry_positions = scan_file(input_f, " orientation:")
-    if ONIOM:
+    geometry_positions = scan_file(input_f, "Input orientation:")
+    if MM:
+        energy_positions = scan_file(input_f, "Energy per function class:")
+    elif ONIOM:
         energy_positions = scan_file(input_f, "ONIOM: extrapolated energy =")
     else:
         energy_positions = scan_file(input_f, "SCF Done:")
@@ -168,16 +171,22 @@ if RUN_TYPE =="LAST" or RUN_TYPE == "NR":
     if RUN_TYPE =="LAST":
         wanted_e_pos = energy_positions[-1]
     elif RUN_TYPE == "NR":
-        wanted_e_pos = energy_positions[str_number-1]
-        
-    geometry_positions.reverse()
-    for g_pos in geometry_positions:
-        if g_pos < wanted_e_pos:
-            jump_g_pos = g_pos-200
-            break
+        wanted_e_pos = energy_positions[str_number - 1]
     
-    input_f.seek(jump_g_pos)
-    temp_geo = read_geo_scf_oniom_e(input_f)
+    if MM: # in MM log energy is reported before the geometry
+        jump_pos = wanted_e_pos - 200 # small offset (200) to be sure jump_pos is at lest one line earlier
+    else: # in ONIOM / SCF energy is reported after the geometry 
+        geometry_positions.reverse()
+        for g_pos in geometry_positions:
+            if g_pos < wanted_e_pos:
+                jump_pos = g_pos - 200
+                break
+    
+    input_f.seek(jump_pos)
+    if MM:
+        temp_geo = read_geo_mm_e(input_f)
+    else:
+        temp_geo = read_geo_scf_oniom_e(input_f)
     temp_geo.print_xyz()
 
     
