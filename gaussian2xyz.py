@@ -17,6 +17,7 @@ The script expects 2 or 3 arguments:
 last modification: 17.10.2022
 last modification: 18.05.2023
 last modification: 19.05.2023
+last modification: 23.05.2023
 """
 
 import sys
@@ -30,11 +31,12 @@ from extract_geoms_aux import log_read_irc_data, log_is_MM, log_read_mm_e, print
 LEGIT_RUN_TYPE = ["SCAN", "IRC", "IRC_F", "ALL", "LAST", "NR"]
 LEGIT_DIRECTIONS = ["REVERSE", "TS", "FORWARD"]
 
-def read_geo_scf_oniom_e(input_f):
+def read_geo_scf_oniom_e(input_f, flag):
     """ from Gaussian output file read geometry and its SCF and ONIOM energies 
     INPUT: input_f - file object (Gaussian output file)
+           flag - string, either "Input orientation:" or "Standard orientation:"
     OUTPUT: temp_geo - Geometry object or "EOF" string  """
-    temp_geo = log_read_geo(input_f)
+    temp_geo = log_read_geo(input_f, flag)
     scf_e = None
     oniom_e = None
     if temp_geo != "EOF":
@@ -46,12 +48,13 @@ def read_geo_scf_oniom_e(input_f):
     return temp_geo
 
 
-def read_geo_mm_e(input_f):
+def read_geo_mm_e(input_f, flag):
     """ from Gaussian output file read MM optimized geometry and its MM energy 
     INPUT: input_f - file object (Gaussian output file)
+           flag - string, either "Input orientation:" or "Standard orientation:"
     OUTPUT: temp_geo - Geometry object or "EOF" string  """
     mm_e = log_read_mm_e(input_f)
-    temp_geo = log_read_geo(input_f)
+    temp_geo = log_read_geo(input_f, flag)
     if temp_geo != "EOF":        
         temp_geo.set_scf_energy(mm_e)
         return temp_geo
@@ -105,6 +108,19 @@ if len(sys.argv) > 3:
 ### parsing the log/out file                                               ###
 input_f = open(inp_file_name, 'r')
 
+inp_orient_positions = scan_file(input_f, "Input orientation:")
+std_orient_positions = scan_file(input_f, "Standard orientation:")
+
+if len(inp_orient_positions) > 0:
+    flag_line = "Input orientation:"
+    geometry_positions = inp_orient_positions
+elif len(std_orient_positions) > 0:
+    flag_line = "Standard orientation:"
+    geometry_positions = std_orient_positions
+else:
+    print("Neither Input nor Standard orientation found!")
+    exit(1)
+
     
 ONIOM = log_is_ONIOM(input_f)
 MM = log_is_MM(input_f)
@@ -113,7 +129,7 @@ if RUN_TYPE == "SCAN":
     scan_geometries = []
     temp_geo = None
     while temp_geo != "EOF":
-        temp_geo = read_geo_scf_oniom_e(input_f)                
+        temp_geo = read_geo_scf_oniom_e(input_f, flag_line)                
         slt = log_read_step_number_line(input_f)
         if slt:
             temp_geo.set_scan_point( slt.scan_point )
@@ -130,7 +146,7 @@ elif RUN_TYPE == "IRC":
     irc_last_point = None
     temp_geo = None
     while temp_geo != "EOF":
-        temp_geo = read_geo_scf_oniom_e(input_f)
+        temp_geo = read_geo_scf_oniom_e(input_f, flag_line)
         irc_conv = is_irc_converged(input_f)
         if irc_conv:
             irc_pt = log_read_irc_data(input_f, irc_last_point)
@@ -149,9 +165,9 @@ if RUN_TYPE == "ALL":
     temp_geo = None
     while temp_geo != "EOF":
         if MM:
-            temp_geo = read_geo_mm_e(input_f)
+            temp_geo = read_geo_mm_e(input_f, flag_line)
         else:
-            temp_geo = read_geo_scf_oniom_e(input_f)
+            temp_geo = read_geo_scf_oniom_e(input_f, flag_line)
         if temp_geo != "EOF" and temp_geo.get_scf_energy():                
             temp_geo.print_xyz()
             seq_nr.append( i )
@@ -160,7 +176,6 @@ if RUN_TYPE == "ALL":
 
 
 if RUN_TYPE =="LAST" or RUN_TYPE == "NR":
-    geometry_positions = scan_file(input_f, "Input orientation:")
     if MM:
         energy_positions = scan_file(input_f, "Energy per function class:")
     elif ONIOM:
@@ -184,9 +199,9 @@ if RUN_TYPE =="LAST" or RUN_TYPE == "NR":
     
     input_f.seek(jump_pos)
     if MM:
-        temp_geo = read_geo_mm_e(input_f)
+        temp_geo = read_geo_mm_e(input_f, flag_line)
     else:
-        temp_geo = read_geo_scf_oniom_e(input_f)
+        temp_geo = read_geo_scf_oniom_e(input_f, flag_line)
     temp_geo.print_xyz()
 
     
@@ -195,7 +210,7 @@ if RUN_TYPE =="LAST" or RUN_TYPE == "NR":
 
 if RUN_TYPE == "IRC" and irc_ts_file_name:    
     irc_ts_f = open(irc_ts_file_name, 'r')
-    temp_geo = read_geo_scf_oniom_e(irc_ts_f)
+    temp_geo = read_geo_scf_oniom_e(irc_ts_f, flag_line)
     temp_geo.set_irc_path_number( 1 )
     temp_geo.set_irc_point_number( 0 )
     temp_geo.set_irc_net_reaction_coordinate( 0.0 )
@@ -256,7 +271,7 @@ if RUN_TYPE == "IRC_F":
                 point_offset = last_point_nr
             input_f = open(f_name, 'r')
             if irc_dir == 'TS':
-                temp_geo = read_geo_scf_oniom_e(input_f)
+                temp_geo = read_geo_scf_oniom_e(input_f, flag_line)
                 temp_geo.set_irc_path_number( 1 )
                 temp_geo.set_irc_point_number( 0 )
                 temp_geo.set_irc_net_reaction_coordinate( 0.0 )
@@ -264,7 +279,7 @@ if RUN_TYPE == "IRC_F":
                 irc_geometries.append(temp_geo)
             else:    
                 while temp_geo != "EOF":
-                    temp_geo = read_geo_scf_oniom_e(input_f)
+                    temp_geo = read_geo_scf_oniom_e(input_f, flag_line)
                     irc_conv = is_irc_converged(input_f)
                     if irc_conv:
                         irc_pt = log_read_irc_data(input_f,irc_last_point)

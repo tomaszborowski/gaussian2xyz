@@ -7,6 +7,7 @@ Authors: Tomasz Borowski, Zuzanna Wojdyla
 last modification: 7.01.2023
 last modification: 18.05.2023
 last modification: 19.05.2023
+last modification: 23.05.2023
 """
 
 import numpy as np
@@ -147,19 +148,20 @@ class Geometry(object):
             print(line)       
 
 
-def log_read_geo(file):
+def log_read_geo(file, flag_line):
     """
     Reads atomic coordinates [A] in input orientation from the Gaussian output
     section marked with "Input orientation:" 
     Parameters
     ----------
     file : log file (file object)
+    flag_line : line marking the geometry (string)
     Returns
     -------
     geometry (Geometry object) or string "EOF"
     """
     # w pliku file wyszukaj odp linii
-    flag_line = "Input orientation:"
+#    flag_line = "Input orientation:"
     atoms = []
     j=0
     while True:
