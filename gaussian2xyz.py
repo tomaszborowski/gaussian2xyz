@@ -18,6 +18,7 @@ last modification: 17.10.2022
 last modification: 18.05.2023
 last modification: 19.05.2023
 last modification: 23.05.2023
+last modification: 28.10.2023
 """
 
 import sys
@@ -172,7 +173,10 @@ if RUN_TYPE == "ALL":
             temp_geo.print_xyz()
             seq_nr.append( i )
             i += 1
-            energie.append( temp_geo.get_scf_energy() )
+            if ONIOM:
+                energie.append( temp_geo.get_oniom_energy() )
+            else:
+                energie.append( temp_geo.get_scf_energy() )
 
 
 if RUN_TYPE =="LAST" or RUN_TYPE == "NR":
