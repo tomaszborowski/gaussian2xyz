@@ -4,10 +4,11 @@
 a collection of classes and functions for gaussian2xyz
 
 Authors: Tomasz Borowski, Zuzanna Wojdyla
-last modification: 7.01.2023
-last modification: 18.05.2023
-last modification: 19.05.2023
-last modification: 23.05.2023
+modification: 7.01.2023
+modification: 18.05.2023
+modification: 19.05.2023
+modification: 23.05.2023
+last modification: 31.10.2023
 """
 
 import numpy as np
@@ -33,14 +34,30 @@ at_num_symbol = \
      58: 'Ce', 59: 'Pr', 60: 'Nd', 61: 'Pm', 62: 'Sm', 63: 'Eu', 64: 'Gd', 65: 'Tb', 66: 'Dy', 67: 'Ho', 68: 'Er',
      69: 'Tm', 70: 'Yb', 71: 'Lu'}
 
+# symbol_at_num - dic mapping symbol to atomic number (up to 86 - Rn)
+symbol_at_num = \
+    {'H': 1, 'He':2,
+     'Li': 3, 'Be':4, 'B': 5, 'C': 6, 'N': 7, 'O': 8, 'F': 9, 'Ne': 10,
+     'Na': 11, 'Mg': 12, 'Al': 13, 'Si': 14, 'P': 15, 'S': 16, 'Cl': 17, 'Ar': 18,
+     'K': 19, 'Ca': 20, 'Sc': 21, 'Ti': 22, 'V': 23, 'Cr': 24, 'Mn': 25, 'Fe': 26, 'Co': 27, 'Ni': 28, 'Cu': 29,
+     'Zn': 30, 'Ga': 31, 'Ge': 32, 'As': 33, 'Se': 34, 'Br': 35, 'Kr': 36,
+     'Rb': 37, 'Sr': 38, 'Y': 39, 'Zr': 40, 'Nb': 41, 'Mo': 42, 'Tc': 43, 'Ru': 44, 'Rh': 45, 'Pd': 46, 'Ag': 47,
+     'Cd': 48, 'In': 49, 'Sn': 50, 'Sb': 51, 'Te': 52, 'I': 53, 'Xe': 54,
+     'Cs': 55, 'Ba': 56, 'La': 57, 'Hf': 72, 'Ta': 73, 'W': 74, 'Re': 75, 'Os': 76, 'Ir': 77, 'Pt': 78, 'Au': 79,
+     'Hg': 80, 'Tl': 81, 'Pb': 82, 'Bi': 83, 'Po': 84, 'At': 85, 'Rn': 86,
+     'Ce': 58, 'Pr': 59, 'Nd': 60, 'Pm': 61, 'Sm': 62, 'Eu': 63, 'Gd': 64, 'Tb': 65, 'Dy': 66, 'Ho': 67, 'Er': 68,
+     'Tm': 69, 'Yb': 70, 'Lu': 71}
 
 class Atom(object):
     atomic_number = 0
     symbol = ""
-    number = 0
+    number = 0 # 1-based index of an atom
     coordinates = np.empty((1, 3), dtype=np.float64)  # coordinates in Angstroms
-    mulliken_charge = None
-    mulliken_spin_pop = None
+    mulliken_charge = 0.0
+    mulliken_spin_pop = 0.0
+    oniom_layer = None # None or one from {H, M, L}
+    link_atom_host = False
+
 
     # the class "constructor"
     def __init__(self, atomic_number, coordinates):
@@ -58,14 +75,21 @@ class Atom(object):
         return self.mulliken_charge
     def get_mulliken_spin_pop(self):
         return self.mulliken_spin_pop
+    def get_oniom_layer(self):
+        return self.oniom_layer
+    def is_link_atom_host(self):
+        return self.link_atom_host
 
     def set_number(self,nr):
         self.number = nr
     def set_mulliken_charge(self,mq):
         self.mulliken_charge = mq
     def set_mulliken_spin_pop(self,ms):
-        self.mulliken_spin_pop = ms    
-
+        self.mulliken_spin_pop = ms
+    def set_oniom_layer(self,ol):
+        self.oniom_layer = ol
+    def set_link_atom_host(self,lah):
+        self.link_atom_host = lah
 
 class Geometry(object):
     atoms = [] # a list of atom objects
@@ -79,6 +103,7 @@ class Geometry(object):
     irc_net_reaction_coordinate = None
     irc_path_number = None
     geom_converged = False
+    h_lah_atoms = [] # a list of atom objects from H-layer or link atom hosts
 
     # the class "constructor"
     def __init__(self, atoms):
@@ -103,6 +128,8 @@ class Geometry(object):
         return self.irc_path_number
     def get_geom_converged(self):
         return self.geom_converged
+    def get_h_lah_atoms(self):
+        return Geometry(self.h_lah_atoms)
     
     def set_atoms(self,atoms):
         self.atoms = atoms
@@ -126,7 +153,31 @@ class Geometry(object):
         self.irc_path_number = irc_path_nr
     def set_geom_converged(self,is_conv):
         self.geom_converged = is_conv
-
+    def set_h_lah_atoms(self):
+        h_lah_atoms = []
+        for atom in self.atoms:
+            if (atom.get_oniom_layer() == 'H') or atom.is_link_atom_host() :
+                h_lah_atoms.append(atom)
+        self.h_lah_atoms = h_lah_atoms
+    def set_mulliken_charges(self,mull_q_list):
+        if self.n_atoms == len(mull_q_list):
+            for atom, q in zip(self.atoms, mull_q_list):
+                atom.set_mulliken_charge(q)
+        else:
+            print("Error attempting to ascribe atom Mulliken charges \n")
+            print("the geometry has: ", self.n_atoms, " atoms \n")
+            print("while provided list of atom charges has length: ", len(mull_q_list))
+            exit(1)
+    def set_mulliken_spin_pops(self,mull_spop_list):
+        if self.n_atoms == len(mull_spop_list):
+            for atom, s in zip(self.atoms, mull_spop_list):
+                atom.set_mulliken_spin_pop(s)
+        else:
+            print("Error attempting to ascribe atom Mulliken spin populations \n")
+            print("the geometry has: ", self.n_atoms, " atoms \n")
+            print("while provided list of atom spin pops has length: ", len(mull_spop_list))
+            exit(1)
+        
     def print_xyz(self):
         print( str(self.n_atoms) )
         if self.oniom_energy:
@@ -147,11 +198,93 @@ class Geometry(object):
                 '{:06.6f}'.format(at_coord[2])
             print(line)       
 
+    def print_xyzs(self):
+        print( str(self.n_atoms) )
+        if self.oniom_energy:
+            head_line = 'oniom energy: ' + str(self.oniom_energy)
+        else:
+            head_line = 'scf energy: ' + str(self.scf_energy)
+        if self.in_scan:     
+            head_line = ' Scan point ' + str(self.scan_point) + ' ' + head_line
+        elif self.in_irc:
+            head_line = ' IRC net coordinate: ' + str(self.irc_net_reaction_coordinate) + ' ' + head_line            
+        print(head_line)
+        for atom in self.atoms:
+            ele = atom.get_symbol()
+            at_coord = atom.get_coords()
+            spin_pop = atom.get_mulliken_spin_pop()
+            line = ele + '\t' +\
+                '{:06.6f}'.format(at_coord[0]) + '     ' +\
+                '{:06.6f}'.format(at_coord[1]) + '     ' +\
+                '{:06.6f}'.format(at_coord[2]) + '     ' +\
+                '{:06.6f}'.format(spin_pop)    
+            print(line)
+            
+        
+def oniom_log_read_inp_geo(file):
+    """
+    Reads initial geometry from the Gaussian output
+    section marked with "Symbolic Z-matrix:"
+    Parameters
+    ----------
+    file : log file (file object)
+    Returns
+    -------
+    geometry (Geometry object) or string "EOF"
+    """
+    flag_line = 'Symbolic Z-matrix:'
+    atoms = []
+    j = 0
+    while True:
+        a = file.readline()
+        if not a:
+            return "EOF"
+        match_flag=re.search(flag_line,a)
+        if match_flag:
+            while True:
+                lah = False
+                o_layer = None
+                a = file.readline()
+                a_list = a.split()
+                a_len = len(a_list) 
+                if a_len == 0:
+                    break    
+                elif a_list[0] == 'Charge':
+                    pass
+                else:
+                    j += 1
+                    at_symbol = a_list[0].split('-')[0]
+                    at_number = symbol_at_num[at_symbol]
+                    if (a_list[1] == '-1') or (a_list[1] == '0'):
+                        x = eval(a_list[2])
+                        y = eval(a_list[3])
+                        z = eval(a_list[4])
+                        if a_len > 5:
+                            o_layer = a_list[5]
+                        if a_len > 6:
+                            lah = True
+                    else:
+                        x = eval(a_list[1])
+                        y = eval(a_list[2])
+                        z = eval(a_list[3])
+                        if a_len > 4:
+                            o_layer = a_list[4]
+                        if a_len > 5:
+                            lah = True
+                    at_coords = [x, y, z]
+                    atom = Atom(at_number, at_coords)
+                    atom.set_oniom_layer(o_layer)
+                    atom.set_link_atom_host(lah)
+                    atom.set_number(j)
+                    atoms.append(atom)
+            geometry = Geometry(atoms)
+            return geometry
+
 
 def log_read_geo(file, flag_line):
     """
     Reads atomic coordinates [A] in input orientation from the Gaussian output
-    section marked with "Input orientation:" 
+    section marked with content of flag_line ("Input orientation:" or "Standard orientation:")
     Parameters
     ----------
     file : log file (file object)
@@ -160,8 +293,6 @@ def log_read_geo(file, flag_line):
     -------
     geometry (Geometry object) or string "EOF"
     """
-    # w pliku file wyszukaj odp linii
-#    flag_line = "Input orientation:"
     atoms = []
     j=0
     while True:
@@ -183,9 +314,37 @@ def log_read_geo(file, flag_line):
                     at_number = line[1] 
                     at_coords = [line[3], line[4], line[5]]
                     atom = Atom(at_number, at_coords)
+                    atom.set_number(j)
                     atoms.append(atom)
             geometry = Geometry(atoms)
             return geometry
+
+
+def log_read_mulliken(file):
+    mull_q = []
+    mull_s = []
+    a = file.readline()
+    a_list = a.split()
+    a_len = len(a_list)
+    if a_len == 2:
+        s_present = True
+    elif a_len == 1:
+        s_present = False
+    else:
+        print("Error while trying to read Mulliken charges (and) spin populations \n")
+        exit(1)
+    while True:
+        a = file.readline()
+        if a[0:4] == " Sum":
+            break    
+        else:
+            a_list = a.split()
+            q = eval(a_list[2])
+            mull_q.append(q)
+            if s_present:
+                s = eval(a_list[3])
+                mull_s.append(s)
+    return (mull_q, mull_s)
 
 
 def step_line_tuple(x,y,z,w):

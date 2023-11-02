@@ -14,11 +14,11 @@ The script expects 2 or 3 arguments:
        or for NR 1-based number of the structure to be extracted
 
 @authors: Tomasz Borowski, Zuzanna Wojdyła
-last modification: 17.10.2022
-last modification: 18.05.2023
-last modification: 19.05.2023
-last modification: 23.05.2023
-last modification: 28.10.2023
+modification: 17.10.2022
+modification: 18.05.2023
+modification: 19.05.2023
+modification: 23.05.2023
+last modification: 31.10.2023
 """
 
 import sys
@@ -28,8 +28,9 @@ from extract_geoms_aux import log_read_geo, log_read_step_number_line
 from extract_geoms_aux import log_read_scf, is_geom_converged, scan_file
 from extract_geoms_aux import log_is_ONIOM, log_read_oniom_e, is_irc_converged
 from extract_geoms_aux import log_read_irc_data, log_is_MM, log_read_mm_e, print_help
+from extract_geoms_aux import oniom_log_read_inp_geo, log_read_mulliken
 
-LEGIT_RUN_TYPE = ["SCAN", "IRC", "IRC_F", "ALL", "LAST", "NR"]
+LEGIT_RUN_TYPE = ["SCAN", "IRC", "IRC_F", "ALL", "LAST", "NR", "LASTS", "NRS"]
 LEGIT_DIRECTIONS = ["REVERSE", "TS", "FORWARD"]
 
 def read_geo_scf_oniom_e(input_f, flag):
@@ -111,6 +112,7 @@ input_f = open(inp_file_name, 'r')
 
 inp_orient_positions = scan_file(input_f, "Input orientation:")
 std_orient_positions = scan_file(input_f, "Standard orientation:")
+mull_qs_positions = scan_file(input_f, "Mulliken charges and spin densities:")
 
 if len(inp_orient_positions) > 0:
     flag_line = "Input orientation:"
@@ -179,7 +181,7 @@ if RUN_TYPE == "ALL":
                 energie.append( temp_geo.get_scf_energy() )
 
 
-if RUN_TYPE =="LAST" or RUN_TYPE == "NR":
+if RUN_TYPE =="LAST" or RUN_TYPE =="LASTS" or RUN_TYPE == "NR" or RUN_TYPE == "NRS":
     if MM:
         energy_positions = scan_file(input_f, "Energy per function class:")
     elif ONIOM:
@@ -187,9 +189,9 @@ if RUN_TYPE =="LAST" or RUN_TYPE == "NR":
     else:
         energy_positions = scan_file(input_f, "SCF Done:")
     
-    if RUN_TYPE =="LAST":
+    if RUN_TYPE =="LAST" or RUN_TYPE =="LASTS":
         wanted_e_pos = energy_positions[-1]
-    elif RUN_TYPE == "NR":
+    elif RUN_TYPE == "NR" or RUN_TYPE == "NRS":
         wanted_e_pos = energy_positions[str_number - 1]
     
     if MM: # in MM log energy is reported before the geometry
@@ -206,7 +208,36 @@ if RUN_TYPE =="LAST" or RUN_TYPE == "NR":
         temp_geo = read_geo_mm_e(input_f, flag_line)
     else:
         temp_geo = read_geo_scf_oniom_e(input_f, flag_line)
-    temp_geo.print_xyz()
+    if RUN_TYPE =="LAST" or RUN_TYPE == "NR":
+        temp_geo.print_xyz()
+    elif RUN_TYPE =="LASTS" or RUN_TYPE == "NRS":
+        if ONIOM: 
+            input_f.seek(0) 
+            input_geo = oniom_log_read_inp_geo(input_f) # read input geometry with info about layers and LAH
+            mull_qs_positions.reverse() # in ONIOM Mulliken charges and spin pops are reported before ONIOM Energy
+            for m_pos in mull_qs_positions:
+                if m_pos < wanted_e_pos:
+                    jump_pos = m_pos
+                    break
+            input_f.seek(jump_pos)
+            mull_q, mull_s = log_read_mulliken(input_f)
+        else:
+            mull_q, mull_s = log_read_mulliken(input_f)            
+        if len(mull_q) == 0:
+            print("Mulliken charges (and spin populations) not found \n")
+            exit(1)
+        else:
+            temp_geo.set_mulliken_spin_pops(mull_s)
+            if ONIOM:
+                for at_temp_geo, at_input_geo in zip(temp_geo.get_atoms(), input_geo.get_atoms()):
+                    at_temp_geo.set_oniom_layer(at_input_geo.get_oniom_layer())
+                    at_temp_geo.set_link_atom_host(at_input_geo.is_link_atom_host())                    
+                temp_geo.set_h_lah_atoms()
+                qm_plus_lah = temp_geo.get_h_lah_atoms()
+                qm_plus_lah.set_oniom_energy(temp_geo.get_oniom_energy())
+                qm_plus_lah.print_xyzs()
+            else:
+                temp_geo.print_xyzs()
 
     
 ### ---------------------------------------------------------------------- ###
