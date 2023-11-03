@@ -4,11 +4,8 @@
 a collection of classes and functions for gaussian2xyz
 
 Authors: Tomasz Borowski, Zuzanna Wojdyla
-modification: 7.01.2023
-modification: 18.05.2023
-modification: 19.05.2023
-modification: 23.05.2023
-last modification: 31.10.2023
+modification: 7.01.2023, 18.05.2023, 19.05.2023, 23.05.2023, 31.10.2023
+last modification: 2.11.2023
 """
 
 import numpy as np
@@ -221,23 +218,25 @@ class Geometry(object):
             print(line)
             
         
-def oniom_log_read_inp_geo(file):
+def log_read_inp_geo(file, flag_line):
     """
     Reads initial geometry from the Gaussian output
-    section marked with "Symbolic Z-matrix:"
+    section marked with "Symbolic Z-matrix:" or "Symbolic Z-Matrix:"
     Parameters
     ----------
     file : log file (file object)
+    flag_line : (string) 'Symbolic Z-matrix:' or 'Symbolic Z-Matrix:'
     Returns
     -------
     geometry (Geometry object) or string "EOF"
     """
-    flag_line = 'Symbolic Z-matrix:'
+    file.seek(0)
     atoms = []
     j = 0
     while True:
         a = file.readline()
         if not a:
+            file.seek(0)
             return "EOF"
         match_flag=re.search(flag_line,a)
         if match_flag:
@@ -278,10 +277,11 @@ def oniom_log_read_inp_geo(file):
                     atom.set_number(j)
                     atoms.append(atom)
             geometry = Geometry(atoms)
+            file.seek(0)
             return geometry
 
 
-def log_read_geo(file, flag_line):
+def log_read_geo(file, flag_line, n_atoms):
     """
     Reads atomic coordinates [A] in input orientation from the Gaussian output
     section marked with content of flag_line ("Input orientation:" or "Standard orientation:")
@@ -289,38 +289,82 @@ def log_read_geo(file, flag_line):
     ----------
     file : log file (file object)
     flag_line : line marking the geometry (string)
+    n_atoms : number of atoms in the geometry to be read (int)
     Returns
     -------
     geometry (Geometry object) or string "EOF"
     """
     atoms = []
-    j=0
+    fortran_line = ff.FortranRecordReader('(I7, I11, I16, 3F12.6)')
     while True:
         a = file.readline()
         if not a:
             return "EOF"
         match_flag=re.search(flag_line,a)
-        if match_flag:
-            j=j+1
+        if match_flag:            
             for i in range(4):
                 file.readline()
-            while True:
+            for i in range(n_atoms):
                 a = file.readline()
-                if a[1] == "-":
-                    break    
-                else:
-                    fortran_line = ff.FortranRecordReader('(I7, I11, I16, 3F12.6)')
-                    line = fortran_line.read(a)
-                    at_number = line[1] 
-                    at_coords = [line[3], line[4], line[5]]
-                    atom = Atom(at_number, at_coords)
-                    atom.set_number(j)
-                    atoms.append(atom)
+                line = fortran_line.read(a)
+                at_number = line[1]
+                at_coords = [line[3], line[4], line[5]]
+                atom = Atom(at_number, at_coords)
+                atom.set_number(i+1)
+                atoms.append(atom)
             geometry = Geometry(atoms)
             return geometry
 
 
+def read_geo_scf_oniom_e(input_f, flag, n_atoms, ONIOM):
+    """ from Gaussian output file read geometry and its SCF and ONIOM energies 
+    INPUT: input_f - file object (Gaussian output file)
+           flag - string, either "Input orientation:" or "Standard orientation:"
+           n_atoms - number or atoms in the geoetry to read (int)
+    OUTPUT: temp_geo - Geometry object or "EOF" string  """
+    temp_geo = log_read_geo(input_f, flag, n_atoms)
+    scf_e = None
+    oniom_e = None
+    if temp_geo != "EOF":
+        scf_e = log_read_scf(input_f)
+        temp_geo.set_scf_energy(scf_e)
+        if ONIOM:
+            oniom_e = log_read_oniom_e(input_f)
+            temp_geo.set_oniom_energy(oniom_e)
+    return temp_geo
+
+
+def read_geo_mm_e(input_f, flag, n_atoms):
+    """ from Gaussian output file read MM optimized geometry and its MM energy 
+    INPUT: input_f - file object (Gaussian output file)
+           flag - string, either "Input orientation:" or "Standard orientation:"
+           n_atoms - number or atoms in the geoetry to read (int)
+    OUTPUT: temp_geo - Geometry object or "EOF" string  """
+    mm_e = log_read_mm_e(input_f)
+    temp_geo = log_read_geo(input_f, flag, n_atoms)
+    if temp_geo != "EOF":        
+        temp_geo.set_scf_energy(mm_e)
+        return temp_geo
+    else:
+        return "EOF" 
+
+
 def log_read_mulliken(file):
+    """
+    read Mulliken charges and (if present) spin populations from Gaussian log file
+
+    Parameters
+    ----------
+    file : - file object (Gaussian output file)
+        
+    Returns
+    -------
+    mull_q : list of floats
+        a list of Mulliken atomic partial charges
+    mull_s : list of floats
+        a list of Mulliken atomic spin populations 
+
+    """
     mull_q = []
     mull_s = []
     a = file.readline()
@@ -386,6 +430,22 @@ def irc_point_tuple(x,y,z):
 
 
 def log_read_irc_data(file, last):
+    """
+    read IRC information from the Gaussian log file
+
+    Parameters
+    ----------
+    file : file object
+        gaussian log file
+    last : int
+        number of a last IRC point to be read from this file
+
+    Returns
+    -------
+    irc_tup : namedtuple
+        a tuple with: path_nr, point_nr, net_reaction_coord
+
+    """
     flag_line = "Point Number:"
     while True:
         a = file.readline()
@@ -589,11 +649,13 @@ def is_geom_converged(file):
         if not a:
             break
         match_conv = re.search(flag_conv,a)
-        match_end_section = re.search(flag_end_section,a)
-        if match_end_section:
-            return False
-        elif match_conv:
+        if match_conv:
             return True
+        else:
+            match_end_section = re.search(flag_end_section,a)
+            if match_end_section:
+                return False
+
 
 def is_irc_converged(file):
     """
@@ -620,6 +682,22 @@ def is_irc_converged(file):
 
 
 def scan_file(file, text_flag):
+    """
+    scan the whole file of occurance of text_flag
+
+    Parameters
+    ----------
+    file : file objects
+        text file
+    text_flag : string
+        a pattern to find
+
+    Returns
+    -------
+    positions : list
+        positions (just after) of the pattern found in the file 
+
+    """
     file.seek(0)
     positions = []
     while True:
@@ -631,7 +709,38 @@ def scan_file(file, text_flag):
             positions.append(file.tell())
     file.seek(0)
     return positions
-        
+
+
+def find_first_infile(file, text_flag):
+    """
+    finds first instance of text_flag in the file
+
+    Parameters
+    ----------
+    file : file objects
+        text file
+    text_flag : string
+        pattern to find
+
+    Returns
+    -------
+    positions : list
+        empty list if pattern not found
+        1-element list with position, if pattern found
+
+    """
+    file.seek(0)
+    positions = []
+    while True:
+        a = file.readline()
+        if not a:
+            break
+        match = re.search(text_flag,a)
+        if match:
+            positions.append(file.tell())
+            file.seek(0)
+            return positions        
+
 
 def print_help():  
     help_text = """
@@ -643,7 +752,7 @@ of ONIOM or SCF energies along the profile is generated.
 
 The script expects 2 or 3 arguments: 
     #1 log-file-name or, for irc_f, name of a file specifying filenames and directions of irc calc.
-    #2 type of extraction - one from amoung: scan, irc, irc_f, all, last, nr
+    #2 type of extraction - one from amoung: scan, irc, irc_f, all, last, nr, lasts, nrs
     #3 (for IRC) file name with SP/FREQ calculations for the TS from which IRC calculations started
        or for NR 1-based number of the structure to be extracted
     """

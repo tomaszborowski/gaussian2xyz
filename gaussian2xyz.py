@@ -9,62 +9,37 @@ of ONIOM or SCF energies along the profile is generated.
 
 The script expects 2 or 3 arguments: 
     #1 log-file-name or, for irc_f, name of a file specifying filenames and directions of irc calc.
-    #2 type of extraction - one from amoung: scan, irc, irc_f, all, last, nr
+    #2 type of extraction - one from amoung: scan, irc, irc_f, all, last, nr, lasts, nrs
     #3 (for IRC) file name with SP/FREQ calculations for the TS from which IRC calculations started
        or for NR 1-based number of the structure to be extracted
 
 @authors: Tomasz Borowski, Zuzanna Wojdyła
-modification: 17.10.2022
-modification: 18.05.2023
-modification: 19.05.2023
-modification: 23.05.2023
-last modification: 31.10.2023
+modification: 17.10.2022, 18.05.2023, 19.05.2023, 23.05.2023, 31.10.2023 
+last modification: 2.11.2023
 """
 
 import sys
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
-from extract_geoms_aux import log_read_geo, log_read_step_number_line
-from extract_geoms_aux import log_read_scf, is_geom_converged, scan_file
-from extract_geoms_aux import log_is_ONIOM, log_read_oniom_e, is_irc_converged
-from extract_geoms_aux import log_read_irc_data, log_is_MM, log_read_mm_e, print_help
-from extract_geoms_aux import oniom_log_read_inp_geo, log_read_mulliken
+from extract_geoms_aux import log_read_step_number_line
+from extract_geoms_aux import is_geom_converged, scan_file
+from extract_geoms_aux import log_is_ONIOM, is_irc_converged
+from extract_geoms_aux import log_read_irc_data, log_is_MM, print_help
+from extract_geoms_aux import log_read_inp_geo, log_read_mulliken
+from extract_geoms_aux import read_geo_scf_oniom_e
+from extract_geoms_aux import read_geo_mm_e, find_first_infile
 
 LEGIT_RUN_TYPE = ["SCAN", "IRC", "IRC_F", "ALL", "LAST", "NR", "LASTS", "NRS"]
 LEGIT_DIRECTIONS = ["REVERSE", "TS", "FORWARD"]
 
-def read_geo_scf_oniom_e(input_f, flag):
-    """ from Gaussian output file read geometry and its SCF and ONIOM energies 
-    INPUT: input_f - file object (Gaussian output file)
-           flag - string, either "Input orientation:" or "Standard orientation:"
-    OUTPUT: temp_geo - Geometry object or "EOF" string  """
-    temp_geo = log_read_geo(input_f, flag)
-    scf_e = None
-    oniom_e = None
-    if temp_geo != "EOF":
-        scf_e = log_read_scf(input_f)
-        temp_geo.set_scf_energy(scf_e)
-        if ONIOM:
-            oniom_e = log_read_oniom_e(input_f)
-            temp_geo.set_oniom_energy(oniom_e)
-    return temp_geo
-
-
-def read_geo_mm_e(input_f, flag):
-    """ from Gaussian output file read MM optimized geometry and its MM energy 
-    INPUT: input_f - file object (Gaussian output file)
-           flag - string, either "Input orientation:" or "Standard orientation:"
-    OUTPUT: temp_geo - Geometry object or "EOF" string  """
-    mm_e = log_read_mm_e(input_f)
-    temp_geo = log_read_geo(input_f, flag)
-    if temp_geo != "EOF":        
-        temp_geo.set_scf_energy(mm_e)
-        return temp_geo
-    else:
-        return "EOF"           
-
-
+           
+### ---------------------------------------------------------------------- ###
 RUN_TYPE = None
+ONIOM = False       # if the log file is from ONIOM calculations
+MM = False          # if the log file is from MM calculations
+n_atoms = 0         # number of atoms in the system
+is_input_orient = False  # if geometry is in Input orientation 
+is_standard_orient = False # if geometry is in Standard orientation
 
 ### ---------------------------------------------------------------------- ###
 ### Seting the file names                                                  ###    
@@ -107,32 +82,103 @@ if len(sys.argv) > 3:
 
 
 ### ---------------------------------------------------------------------- ###
-### parsing the log/out file                                               ###
+### initial parsing the log/out file                                       ###
 input_f = open(inp_file_name, 'r')
 
-inp_orient_positions = scan_file(input_f, "Input orientation:")
-std_orient_positions = scan_file(input_f, "Standard orientation:")
-mull_qs_positions = scan_file(input_f, "Mulliken charges and spin densities:")
+inp_orient_positions = []
+std_orient_positions = []
 
-if len(inp_orient_positions) > 0:
+if RUN_TYPE != "IRC_F":
+    if RUN_TYPE =="LAST" or RUN_TYPE =="LASTS" or RUN_TYPE == "NR" or RUN_TYPE == "NRS":
+        inp_orient_positions = scan_file(input_f, "Input orientation:")
+        if len(inp_orient_positions) > 0:
+            is_input_orient = True
+        if not is_input_orient:
+            std_orient_positions = scan_file(input_f, "Standard orientation:")
+            if len(std_orient_positions) > 0:
+                is_standard_orient = True
+    else:
+        inp_orient_positions = find_first_infile(input_f, "Input orientation:")
+        if len(inp_orient_positions) > 0:
+            is_input_orient = True
+        if not is_input_orient:
+            std_orient_positions = find_first_infile(input_f, "Standard orientation:")
+            if len(std_orient_positions) > 0:
+                is_standard_orient = True
+                
+elif RUN_TYPE == "IRC_F":
+    irc_file_names = []
+    irc_directions = [] 
+    irc_last = [] 
+                                                       
+    while True:
+        a = input_f.readline()
+        if not a:
+            break
+        a_split = a.split()
+        irc_file_names.append(a_split[0])
+        direction_read = a_split[1].upper()
+        if len(a.split())==3:
+            irc_last.append(a_split[2])
+        else:
+            irc_last.append(None)
+        if direction_read in LEGIT_DIRECTIONS:
+            irc_directions.append(direction_read)
+    input_f.close()
+
+    file_name_1 = irc_file_names[0] 
+    input_f_1 = open(file_name_1, 'r') # using first irc file as a reference
+    inp_orient_positions = find_first_infile(input_f_1, "Input orientation:")
+    if len(inp_orient_positions) > 0:
+        is_input_orient = True
+    if not is_input_orient:
+        std_orient_positions = find_first_infile(input_f_1, "Standard orientation:")
+        if len(std_orient_positions) > 0:
+            is_standard_orient = True    
+
+if is_input_orient:
     flag_line = "Input orientation:"
     geometry_positions = inp_orient_positions
-elif len(std_orient_positions) > 0:
+elif is_standard_orient:
     flag_line = "Standard orientation:"
     geometry_positions = std_orient_positions
 else:
     print("Neither Input nor Standard orientation found!")
     exit(1)
 
+if RUN_TYPE == "LASTS" or RUN_TYPE == "NRS":
+    mull_qs_positions = scan_file(input_f, "Mulliken charges and spin densities:")
+
+if RUN_TYPE != "IRC_F":
+    ONIOM = log_is_ONIOM(input_f)
+    if not ONIOM:
+        MM = log_is_MM(input_f)
+elif RUN_TYPE == "IRC_F":
+    ONIOM = log_is_ONIOM(input_f_1)
+    if not ONIOM:
+        MM = log_is_MM(input_f_1)    
+
+if MM:
+    inp_geo_flag = 'Symbolic Z-Matrix:'
+else:
+    inp_geo_flag = 'Symbolic Z-matrix:'
+
+if RUN_TYPE != "IRC_F":    
+    input_geo = log_read_inp_geo(input_f, inp_geo_flag) # read input geometry (for ONIOM with info about layers and LAH)   
+elif RUN_TYPE == "IRC_F":
+    input_geo = log_read_inp_geo(input_f_1, inp_geo_flag)
+    input_f_1.close()
+
+n_atoms = input_geo.get_n_atoms()
     
-ONIOM = log_is_ONIOM(input_f)
-MM = log_is_MM(input_f)
+### ---------------------------------------------------------------------- ###
+### case specific parsing the log/out file                                       ###
 
 if RUN_TYPE == "SCAN":
     scan_geometries = []
     temp_geo = None
-    while temp_geo != "EOF":
-        temp_geo = read_geo_scf_oniom_e(input_f, flag_line)                
+    while temp_geo != "EOF": 
+        temp_geo = read_geo_scf_oniom_e(input_f, flag_line, n_atoms, ONIOM)               
         slt = log_read_step_number_line(input_f)
         if slt:
             temp_geo.set_scan_point( slt.scan_point )
@@ -142,35 +188,19 @@ if RUN_TYPE == "SCAN":
             if geom_conv or last_step:
                 temp_geo.set_in_scan(True)
                 scan_geometries.append(temp_geo)
+    input_f.close()
 
     
-elif RUN_TYPE == "IRC":
-    irc_geometries = [] 
-    irc_last_point = None
-    temp_geo = None
-    while temp_geo != "EOF":
-        temp_geo = read_geo_scf_oniom_e(input_f, flag_line)
-        irc_conv = is_irc_converged(input_f)
-        if irc_conv:
-            irc_pt = log_read_irc_data(input_f, irc_last_point)
-            if irc_pt:
-                temp_geo.set_irc_path_number( irc_pt.path_nr )
-                temp_geo.set_irc_point_number( irc_pt.point_nr )
-                temp_geo.set_irc_net_reaction_coordinate( irc_pt.net_reaction_coord )
-                temp_geo.set_in_irc(True)
-                irc_geometries.append(temp_geo)
-            
-
-if RUN_TYPE == "ALL":
+elif RUN_TYPE == "ALL":
     seq_nr = []
     energie = []
     i = 1
     temp_geo = None
     while temp_geo != "EOF":
         if MM:
-            temp_geo = read_geo_mm_e(input_f, flag_line)
+            temp_geo = read_geo_mm_e(input_f, flag_line, n_atoms)
         else:
-            temp_geo = read_geo_scf_oniom_e(input_f, flag_line)
+            temp_geo = read_geo_scf_oniom_e(input_f, flag_line, n_atoms, ONIOM)
         if temp_geo != "EOF" and temp_geo.get_scf_energy():                
             temp_geo.print_xyz()
             seq_nr.append( i )
@@ -179,9 +209,10 @@ if RUN_TYPE == "ALL":
                 energie.append( temp_geo.get_oniom_energy() )
             else:
                 energie.append( temp_geo.get_scf_energy() )
+    input_f.close()
 
 
-if RUN_TYPE =="LAST" or RUN_TYPE =="LASTS" or RUN_TYPE == "NR" or RUN_TYPE == "NRS":
+elif RUN_TYPE =="LAST" or RUN_TYPE =="LASTS" or RUN_TYPE == "NR" or RUN_TYPE == "NRS":
     if MM:
         energy_positions = scan_file(input_f, "Energy per function class:")
     elif ONIOM:
@@ -205,15 +236,13 @@ if RUN_TYPE =="LAST" or RUN_TYPE =="LASTS" or RUN_TYPE == "NR" or RUN_TYPE == "N
     
     input_f.seek(jump_pos)
     if MM:
-        temp_geo = read_geo_mm_e(input_f, flag_line)
+        temp_geo = read_geo_mm_e(input_f, flag_line, n_atoms)
     else:
-        temp_geo = read_geo_scf_oniom_e(input_f, flag_line)
+        temp_geo = read_geo_scf_oniom_e(input_f, flag_line, n_atoms, ONIOM)
     if RUN_TYPE =="LAST" or RUN_TYPE == "NR":
         temp_geo.print_xyz()
     elif RUN_TYPE =="LASTS" or RUN_TYPE == "NRS":
         if ONIOM: 
-            input_f.seek(0) 
-            input_geo = oniom_log_read_inp_geo(input_f) # read input geometry with info about layers and LAH
             mull_qs_positions.reverse() # in ONIOM Mulliken charges and spin pops are reported before ONIOM Energy
             for m_pos in mull_qs_positions:
                 if m_pos < wanted_e_pos:
@@ -238,46 +267,39 @@ if RUN_TYPE =="LAST" or RUN_TYPE =="LASTS" or RUN_TYPE == "NR" or RUN_TYPE == "N
                 qm_plus_lah.print_xyzs()
             else:
                 temp_geo.print_xyzs()
+    input_f.close()
 
+
+elif RUN_TYPE == "IRC":
+    irc_geometries = [] 
+    irc_last_point = None
+    temp_geo = None
+    while temp_geo != "EOF":
+        temp_geo = read_geo_scf_oniom_e(input_f, flag_line, n_atoms, ONIOM)
+        irc_conv = is_irc_converged(input_f)
+        if irc_conv:
+            irc_pt = log_read_irc_data(input_f, irc_last_point)
+            if irc_pt:
+                temp_geo.set_irc_path_number( irc_pt.path_nr )
+                temp_geo.set_irc_point_number( irc_pt.point_nr )
+                temp_geo.set_irc_net_reaction_coordinate( irc_pt.net_reaction_coord )
+                temp_geo.set_in_irc(True)
+                irc_geometries.append(temp_geo)
+    input_f.close()
+
+    if irc_ts_file_name:    # optionally for IRC read the TS from a separate file
+        irc_ts_f = open(irc_ts_file_name, 'r')
+        temp_geo = read_geo_scf_oniom_e(input_f, flag_line, n_atoms, ONIOM)
+        temp_geo.set_irc_path_number( 1 )
+        temp_geo.set_irc_point_number( 0 )
+        temp_geo.set_irc_net_reaction_coordinate( 0.0 )
+        temp_geo.set_in_irc(True)
+        irc_geometries.append(temp_geo)    
     
-### ---------------------------------------------------------------------- ###
-### optionally for IRC read the TS from a separate file                    ###
+        irc_ts_f.close()
+                                                            
 
-if RUN_TYPE == "IRC" and irc_ts_file_name:    
-    irc_ts_f = open(irc_ts_file_name, 'r')
-    temp_geo = read_geo_scf_oniom_e(irc_ts_f, flag_line)
-    temp_geo.set_irc_path_number( 1 )
-    temp_geo.set_irc_point_number( 0 )
-    temp_geo.set_irc_net_reaction_coordinate( 0.0 )
-    temp_geo.set_in_irc(True)
-    irc_geometries.append(temp_geo)    
-
-    irc_ts_f.close()
-
-
-### ---------------------------------------------------------------------- ###
-### case IRC_F                                                             ###
-irc_file_names = []
-irc_directions = [] 
-irc_last = [] 
-                                                 
-if RUN_TYPE == "IRC_F":   
-    while True:
-        a = input_f.readline()
-        if not a:
-            break
-        a_split = a.split()
-        irc_file_names.append(a_split[0])
-        direction_read = a_split[1].upper()
-        if len(a.split())==3:
-            irc_last.append(a_split[2])
-        else:
-            irc_last.append(None)
-        if direction_read in LEGIT_DIRECTIONS:
-            irc_directions.append(direction_read)
-input_f.close()
-
-if RUN_TYPE == "IRC_F":
+elif RUN_TYPE == "IRC_F":
     nr_irc_files = len(irc_file_names)
     nr_irc_directions = len(irc_directions)
     
@@ -306,7 +328,7 @@ if RUN_TYPE == "IRC_F":
                 point_offset = last_point_nr
             input_f = open(f_name, 'r')
             if irc_dir == 'TS':
-                temp_geo = read_geo_scf_oniom_e(input_f, flag_line)
+                temp_geo = read_geo_scf_oniom_e(input_f, flag_line, n_atoms, ONIOM)
                 temp_geo.set_irc_path_number( 1 )
                 temp_geo.set_irc_point_number( 0 )
                 temp_geo.set_irc_net_reaction_coordinate( 0.0 )
@@ -314,7 +336,7 @@ if RUN_TYPE == "IRC_F":
                 irc_geometries.append(temp_geo)
             else:    
                 while temp_geo != "EOF":
-                    temp_geo = read_geo_scf_oniom_e(input_f, flag_line)
+                    temp_geo = read_geo_scf_oniom_e(input_f, flag_line, n_atoms, ONIOM)
                     irc_conv = is_irc_converged(input_f)
                     if irc_conv:
                         irc_pt = log_read_irc_data(input_f,irc_last_point)
@@ -346,8 +368,7 @@ if RUN_TYPE == "SCAN":
             energie.append( geo.get_oniom_energy() )
         else:
             energie.append( geo.get_scf_energy() )
-        
-        
+                
     plt.figure(1)
     ax = plt.figure().gca()
     ax.xaxis.set_major_locator(MaxNLocator(integer=True)) 
@@ -360,7 +381,6 @@ if RUN_TYPE == "SCAN":
         plt.ylabel('SCF E [a.u.]')
     plt.savefig(fig_file_name, dpi=300)
     
-
 elif RUN_TYPE == "IRC" or RUN_TYPE == "IRC_F":
     irc_net_coord = []
     energie = []
