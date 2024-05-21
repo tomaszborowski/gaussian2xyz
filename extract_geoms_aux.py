@@ -4,8 +4,8 @@
 a collection of classes and functions for gaussian2xyz
 
 Authors: Tomasz Borowski, Zuzanna Wojdyla
-modification: 7.01.2023, 18.05.2023, 19.05.2023, 23.05.2023, 31.10.2023
-last modification: 2.11.2023
+modification: 7.01.2023, 18.05.2023, 19.05.2023, 23.05.2023, 31.10.2023, 21.11.2023
+last modification: 21.05.2024
 """
 
 import numpy as np
@@ -44,6 +44,10 @@ symbol_at_num = \
      'Hg': 80, 'Tl': 81, 'Pb': 82, 'Bi': 83, 'Po': 84, 'At': 85, 'Rn': 86,
      'Ce': 58, 'Pr': 59, 'Nd': 60, 'Pm': 61, 'Sm': 62, 'Eu': 63, 'Gd': 64, 'Tb': 65, 'Dy': 66, 'Ho': 67, 'Er': 68,
      'Tm': 69, 'Yb': 70, 'Lu': 71}
+
+# tranlation dictionary translating digits to None
+dig2none = {48: None, 49: None, 50: None, 51: None, 52: None, 53: None, 
+            54: None, 55: None, 56: None, 57: None}
 
 class Atom(object):
     atomic_number = 0
@@ -253,6 +257,7 @@ def log_read_inp_geo(file, flag_line):
                 else:
                     j += 1
                     at_symbol = a_list[0].split('-')[0]
+                    at_symbol = at_symbol.translate(dig2none) # remove digits from atomic symbols (C1 -> C)
                     at_number = symbol_at_num[at_symbol]
                     if (a_list[1] == '-1') or (a_list[1] == '0'):
                         x = eval(a_list[2])
@@ -738,8 +743,9 @@ def find_first_infile(file, text_flag):
         match = re.search(text_flag,a)
         if match:
             positions.append(file.tell())
-            file.seek(0)
-            return positions        
+            break
+    file.seek(0)
+    return positions        
 
 
 def print_help():  
