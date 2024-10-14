@@ -14,8 +14,8 @@ The script expects 2 or 3 arguments:
        or for NR 1-based number of the structure to be extracted
 
 @authors: Tomasz Borowski, Zuzanna Wojdyła
-modification: 17.10.2022, 18.05.2023, 19.05.2023, 23.05.2023, 31.10.2023 
-last modification: 2.11.2023
+modification: 17.10.2022, 18.05.2023, 19.05.2023, 23.05.2023, 31.10.2023, 2.11.2023 
+last modification: 14.10.2024
 """
 
 import sys
@@ -251,6 +251,11 @@ elif RUN_TYPE =="LAST" or RUN_TYPE =="LASTS" or RUN_TYPE == "NR" or RUN_TYPE == 
             input_f.seek(jump_pos)
             mull_q, mull_s = log_read_mulliken(input_f)
         else:
+            for m_pos in mull_qs_positions:
+                if m_pos > wanted_e_pos: # in QM (not ONIOM) job logs Mulliken charges and spin pops are reported after SCF Energy
+                    jump_pos = m_pos
+                    break
+            input_f.seek(jump_pos)
             mull_q, mull_s = log_read_mulliken(input_f)            
         if len(mull_q) == 0:
             print("Mulliken charges (and spin populations) not found \n")
