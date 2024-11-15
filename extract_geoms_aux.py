@@ -4,8 +4,8 @@
 a collection of classes and functions for gaussian2xyz
 
 Authors: Tomasz Borowski, Zuzanna Wojdyla
-modification: 7.01.2023, 18.05.2023, 19.05.2023, 23.05.2023, 31.10.2023, 21.11.2023
-last modification: 21.05.2024
+modification: 7.01.2023, 18.05.2023, 19.05.2023, 23.05.2023, 31.10.2023, 21.11.2023, 21.05.2024
+last modification: 15.11.2024
 """
 
 import numpy as np
@@ -258,6 +258,7 @@ def log_read_inp_geo(file, flag_line):
                     j += 1
                     at_symbol = a_list[0].split('-')[0]
                     at_symbol = at_symbol.translate(dig2none) # remove digits from atomic symbols (C1 -> C)
+                    at_symbol = re.sub(r'\(.*?\)', '', at_symbol) # remove parenthecized nuclear parameters (thanks to Tim de Groot)
                     at_number = symbol_at_num[at_symbol]
                     if (a_list[1] == '-1') or (a_list[1] == '0'):
                         x = eval(a_list[2])
